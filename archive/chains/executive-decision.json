@@ -1,0 +1,72 @@
+{
+  "name": "executive-decision",
+  "description": "Strategic decision-making workflow with performance analysis and risk assessment",
+  "version": "1.0.0",
+  "tools": [
+    "analyze_performance",
+    "risk_assessment",
+    "make_executive_decision",
+    "strategic_planning",
+    "delegate_task"
+  ],
+  "parameters": {
+    "required": ["context", "decision_type"],
+    "optional": ["stakeholders", "timeline", "budget"]
+  },
+  "output": {
+    "decision": "string",
+    "rationale": "string",
+    "action_items": "array",
+    "risk_assessment": "object"
+  },
+  "steps": [
+    {
+      "step": 1,
+      "tool": "analyze_performance",
+      "description": "Analyze current performance metrics",
+      "input": {
+        "context": "{{context}}",
+        "metrics": ["revenue", "efficiency", "customer_satisfaction"]
+      }
+    },
+    {
+      "step": 2,
+      "tool": "risk_assessment",
+      "description": "Assess risks for each option",
+      "input": {
+        "context": "{{context}}",
+        "options": "{{options}}"
+      }
+    },
+    {
+      "step": 3,
+      "tool": "make_executive_decision",
+      "description": "Make the strategic decision",
+      "input": {
+        "context": "{{context}}",
+        "performance": "{{step1.output}}",
+        "risks": "{{step2.output}}",
+        "decision_type": "{{decision_type}}"
+      }
+    },
+    {
+      "step": 4,
+      "tool": "strategic_planning",
+      "description": "Create implementation plan",
+      "input": {
+        "decision": "{{step3.output}}",
+        "timeline": "{{timeline}}",
+        "stakeholders": "{{stakeholders}}"
+      }
+    },
+    {
+      "step": 5,
+      "tool": "delegate_task",
+      "description": "Delegate action items",
+      "input": {
+        "plan": "{{step4.output}}",
+        "action_items": "{{step3.output.action_items}}"
+      }
+    }
+  ]
+}

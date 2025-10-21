@@ -1,0 +1,182 @@
+openapi: 3.1.0
+info:
+  title: ChittyMCP Complete Ecosystem
+  version: 2.0.0
+  description: |
+    Full access to MCP servers and registry. Includes chain execution and token help.
+servers:
+  - url: https://chittymcp-production.chitty.workers.dev
+    description: ChittyMCP Gateway
+  - url: https://chittyregistry-production.chitty.workers.dev
+    description: ChittyRegistry Search Hub
+paths:
+  /execute/{server}/{tool}:
+    post:
+      operationId: executeTool
+      summary: Execute a specific tool on a given MCP server
+      parameters:
+        - name: server
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [legal, executive, development, automation, notion, github, cloudflare, neon, google-drive, desktop-commander, huggingface, canva, plaid, osascript, imessage, spotify, chrome, notes]
+        - name: tool
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        '200':
+          description: Tool execution result
+          content:
+            application/json:
+              schema: { type: object }
+      security: [ { bearerAuth: [] } ]
+
+  /chain/execute:
+    post:
+      operationId: executeChain
+      summary: Execute a sequence of MCP tools
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                chain:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      server: { type: string }
+                      tool: { type: string }
+                      params: { type: object }
+                      output_to: { type: string }
+                      use_output_from: { type: string }
+      responses:
+        '200':
+          description: Results and context
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  results: { type: array, items: { type: object } }
+                  context: { type: object }
+      security: [ { bearerAuth: [] } ]
+
+  /discover/tools:
+    get:
+      operationId: discoverAllTools
+      summary: List available tools (optionally filter by server/category)
+      parameters:
+        - name: server
+          in: query
+          required: false
+          schema: { type: string }
+        - name: category
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        '200':
+          description: Tools grouped by server
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    server: { type: string }
+                    tools:
+                      type: array
+                      items: { type: string }
+      security: [ { bearerAuth: [] } ]
+
+  /registry/search:
+    post:
+      operationId: searchRegistry
+      summary: Search ChittyRegistry for tools, agents, services, or scripts
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ query ]
+              properties:
+                query: { type: string }
+                type:
+                  type: string
+                  enum: [tool, agent, service, script]
+                limit:
+                  type: integer
+                  default: 10
+      responses:
+        '200':
+          description: Search results
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    name: { type: string }
+                    server: { type: string }
+                    description: { type: string }
+      security: [ { bearerAuth: [] } ]
+
+  /chain/run:
+    post:
+      operationId: runNamedChain
+      summary: Run a predefined tool chain by name
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ chain_name, variables ]
+              properties:
+                chain_name: { type: string }
+                variables: { type: object }
+      responses:
+        '200':
+          description: Execution result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  results: { type: array, items: { type: object } }
+                  context: { type: object }
+      security: [ { bearerAuth: [] } ]
+
+  /help/token:
+    get:
+      operationId: getTokenHelp
+      summary: Get instructions for securely acquiring a ChittyMCP token
+      responses:
+        '200':
+          description: Help text
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

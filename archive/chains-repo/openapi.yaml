@@ -1,0 +1,490 @@
+openapi: 3.1.0
+info:
+  title: ChittyMCP API
+  description: Model Context Protocol Server for ChittyOS ecosystem with 19 tools across 4 categories
+  version: 3.0.0
+  contact:
+    name: ChittyOS Support
+    url: https://chitty.cc
+    email: support@chitty.cc
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: https://chittymcp.chittycorp-llc.workers.dev
+    description: Production server
+  - url: https://chittymcp-staging.chittycorp-llc.workers.dev
+    description: Staging server
+
+security:
+  - BearerAuth: []
+
+paths:
+  /health:
+    get:
+      summary: Health check
+      operationId: healthCheck
+      security: []
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+                  version:
+                    type: string
+                    example: 3.0.0
+
+  /v1/mcp/tools:
+    get:
+      summary: List all available MCP tools
+      operationId: listTools
+      responses:
+        '200':
+          description: List of tools
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  tools:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Tool'
+
+  /v1/mcp/execute:
+    post:
+      summary: Execute an MCP tool
+      operationId: executeTool
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - tool
+                - arguments
+              properties:
+                tool:
+                  type: string
+                  example: make_executive_decision
+                arguments:
+                  type: object
+      responses:
+        '200':
+          description: Tool execution result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  result:
+                    type: object
+                  execution_time:
+                    type: number
+
+  /v1/mcp/chains:
+    get:
+      summary: List all available chains
+      operationId: listChains
+      responses:
+        '200':
+          description: List of chains
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  chains:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Chain'
+
+  /v1/mcp/chains/{chainName}:
+    get:
+      summary: Get chain definition
+      operationId: getChain
+      parameters:
+        - name: chainName
+          in: path
+          required: true
+          schema:
+            type: string
+            enum:
+              - executive-decision
+              - legal-workflow
+              - infrastructure-deploy
+              - cross-sync
+              - full-orchestration
+      responses:
+        '200':
+          description: Chain definition
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Chain'
+
+    post:
+      summary: Execute a chain
+      operationId: executeChain
+      parameters:
+        - name: chainName
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                context:
+                  type: string
+                parameters:
+                  type: object
+      responses:
+        '200':
+          description: Chain execution result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  execution_id:
+                    type: string
+                  results:
+                    type: array
+                    items:
+                      type: object
+                  summary:
+                    type: object
+
+  /v1/mcp/cross-sync/register:
+    post:
+      summary: Register MCP server for cross-sync
+      operationId: registerServer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - device_id
+                - server_url
+              properties:
+                device_id:
+                  type: string
+                server_url:
+                  type: string
+                metadata:
+                  type: object
+      responses:
+        '200':
+          description: Registration successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  server_id:
+                    type: string
+                  status:
+                    type: string
+
+  /v1/mcp/cross-sync/sync:
+    post:
+      summary: Sync MCP state
+      operationId: syncState
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - device_id
+                - state_data
+              properties:
+                device_id:
+                  type: string
+                state_data:
+                  type: object
+      responses:
+        '200':
+          description: Sync successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  sync_id:
+                    type: string
+                  status:
+                    type: string
+
+  /v1/mcp/cross-sync/servers:
+    get:
+      summary: Get synced servers
+      operationId: getSyncedServers
+      responses:
+        '200':
+          description: List of synced servers
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  servers:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        server_id:
+                          type: string
+                        device_id:
+                          type: string
+                        last_sync:
+                          type: string
+                          format: date-time
+
+  /v1/webhooks/register:
+    post:
+      summary: Register entity webhook for financial alerts
+      operationId: registerEntityWebhook
+      tags:
+        - Webhooks
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - entity_id
+                - webhook_url
+                - event_types
+                - secret_token
+              properties:
+                entity_id:
+                  type: string
+                  example: chitty-legal
+                  description: Entity identifier (chitty-legal, chitty-tech, etc)
+                webhook_url:
+                  type: string
+                  format: uri
+                  example: https://webhooks.example.com/alerts
+                event_types:
+                  type: array
+                  items:
+                    type: string
+                    enum:
+                      - balanceDrop
+                      - largeTransaction
+                      - complianceIssue
+                secret_token:
+                  type: string
+                  description: Secret for HMAC verification
+      responses:
+        '200':
+          description: Webhook registered
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+
+  /v1/webhooks/unregister:
+    post:
+      summary: Unregister entity webhook
+      operationId: unregisterEntityWebhook
+      tags:
+        - Webhooks
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - entity_id
+                - webhook_url
+              properties:
+                entity_id:
+                  type: string
+                webhook_url:
+                  type: string
+                  format: uri
+      responses:
+        '200':
+          description: Webhook unregistered
+
+  /v1/webhooks/list:
+    get:
+      summary: List entity webhooks
+      operationId: listEntityWebhooks
+      tags:
+        - Webhooks
+      parameters:
+        - name: entity_id
+          in: query
+          required: true
+          schema:
+            type: string
+            example: chitty-legal
+      responses:
+        '200':
+          description: List of webhooks
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    webhook_url:
+                      type: string
+                    event_types:
+                      type: array
+                      items:
+                        type: string
+                    registered_at:
+                      type: string
+                      format: date-time
+
+  /v1/webhooks/trigger:
+    post:
+      summary: Trigger webhook for testing
+      operationId: triggerEntityWebhook
+      tags:
+        - Webhooks
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - entity_id
+                - event_type
+                - payload
+              properties:
+                entity_id:
+                  type: string
+                event_type:
+                  type: string
+                  enum:
+                    - balanceDrop
+                    - largeTransaction
+                    - complianceIssue
+                payload:
+                  type: object
+                  additionalProperties: true
+      responses:
+        '202':
+          description: Webhook triggered
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  dispatched:
+                    type: boolean
+                  timestamp:
+                    type: string
+                    format: date-time
+
+  /v1/webhooks/events:
+    get:
+      summary: List webhook event types
+      operationId: listWebhookEventTypes
+      tags:
+        - Webhooks
+      security: []
+      responses:
+        '200':
+          description: Event types
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+                  enum:
+                    - balanceDrop
+                    - largeTransaction
+                    - complianceIssue
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: ChittyID token obtained from id.chitty.cc
+
+  schemas:
+    Tool:
+      type: object
+      properties:
+        name:
+          type: string
+        category:
+          type: string
+          enum: [executive, legal, infrastructure, cross-sync]
+        description:
+          type: string
+        parameters:
+          type: object
+        returns:
+          type: object
+
+    Chain:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        tools:
+          type: array
+          items:
+            type: string
+        parameters:
+          type: object
+          properties:
+            required:
+              type: array
+              items:
+                type: string
+            optional:
+              type: array
+              items:
+                type: string
+        output:
+          type: object
+
+tags:
+  - name: Health
+    description: Health check endpoints
+  - name: Tools
+    description: MCP tool operations
+  - name: Chains
+    description: Tool chain orchestration
+  - name: Cross-Sync
+    description: Cross-device synchronization
+  - name: Webhooks
+    description: Entity webhook management for financial alerts

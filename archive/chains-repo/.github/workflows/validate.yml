@@ -1,0 +1,95 @@
+name: Validate Chains and OpenAPI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: |
+          npm install -g @apidevtools/swagger-cli
+          npm install -g ajv-cli
+
+      - name: Validate OpenAPI spec
+        run: swagger-cli validate openapi.yaml
+
+      - name: Validate chains.json schema
+        run: |
+          cat > chains.schema.json <<'EOF'
+          {
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "type": "object",
+            "required": ["version", "chains", "metadata"],
+            "properties": {
+              "version": {"type": "string"},
+              "chains": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["name", "description", "tools", "parameters", "output"],
+                  "properties": {
+                    "name": {"type": "string"},
+                    "description": {"type": "string"},
+                    "tools": {
+                      "type": "array",
+                      "items": {"type": "string"}
+                    },
+                    "parameters": {"type": "object"},
+                    "output": {"type": "object"}
+                  }
+                }
+              }
+            }
+          }
+          EOF
+          ajv validate -s chains.schema.json -d chains.json
+
+      - name: Check chain integrity
+        run: |
+          # Verify all chains reference valid tools
+          node -e '
+            const chains = require("./chains.json");
+            const validTools = [
+              "make_executive_decision", "delegate_task", "analyze_performance",
+              "strategic_planning", "risk_assessment", "generate_chitty_id",
+              "create_legal_case", "analyze_document", "process_payment",
+              "compliance_check", "search_cases", "execute_workflow",
+              "deploy_worker", "manage_r2_bucket", "execute_d1_query",
+              "manage_kv_namespace", "register_mcp_server", "sync_mcp_state",
+              "get_synced_servers"
+            ];
+
+            chains.chains.forEach(chain => {
+              chain.tools.forEach(tool => {
+                if (!validTools.includes(tool)) {
+                  throw new Error(`Invalid tool "${tool}" in chain "${chain.name}"`);
+                }
+              });
+            });
+
+            console.log("✅ All chains valid");
+          '
+
+      - name: Test API endpoints (if deployed)
+        if: github.ref == 'refs/heads/main'
+        run: |
+          # Health check
+          curl -f https://chittymcp.chittycorp-llc.workers.dev/health || exit 1
+
+          # Validate chains endpoint
+          curl -f https://chittymcp.chittycorp-llc.workers.dev/v1/mcp/chains || exit 1
+
+          echo "✅ API endpoints responding"

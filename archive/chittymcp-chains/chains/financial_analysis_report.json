@@ -1,0 +1,81 @@
+{
+  "name": "financial_analysis_report",
+  "description": "Gather financial data, analyze, create report",
+  "chain": [
+    {
+      "server": "plaid",
+      "tool": "plaid_get_usages",
+      "params": {
+        "period_start": "{{start_date}}",
+        "period_end": "{{end_date}}",
+        "metric_types": ["transactions", "balance-request"]
+      },
+      "output_to": "plaid_data"
+    },
+    {
+      "server": "google-drive",
+      "tool": "google_drive_search",
+      "params": {
+        "api_query": "fullText contains 'invoice' and modifiedTime > '{{start_date}}'",
+        "semantic_query": "invoices and revenue"
+      },
+      "output_to": "invoice_docs"
+    },
+    {
+      "server": "executive",
+      "tool": "cfo_analysis",
+      "params": {
+        "plaid_data": "{{plaid_data}}",
+        "invoices": "{{invoice_docs.results}}",
+        "period": "{{start_date}} to {{end_date}}"
+      },
+      "output_to": "financial_analysis"
+    },
+    {
+      "server": "canva",
+      "tool": "generate-design",
+      "params": {
+        "design_type": "report",
+        "query": "Financial Report {{financial_analysis.summary}}"
+      },
+      "output_to": "report_design"
+    },
+    {
+      "server": "canva",
+      "tool": "export-design",
+      "params": {
+        "design_id": "{{report_design.id}}",
+        "format": {"type": "pdf", "export_quality": "pro"}
+      },
+      "output_to": "pdf_report"
+    },
+    {
+      "server": "legal",
+      "tool": "chain_record",
+      "params": {
+        "type": "financial_report",
+        "period": "{{start_date}}_{{end_date}}",
+        "data_hash": "{{financial_analysis.hash}}",
+        "report_url": "{{pdf_report.download_url}}"
+      },
+      "output_to": "audit_trail"
+    },
+    {
+      "server": "notion",
+      "tool": "notion-create-pages",
+      "params": {
+        "parent": {"data_source_id": "financial-reports"},
+        "pages": [{
+          "properties": {
+            "title": "Financial Report {{end_date}}",
+            "Revenue": "{{financial_analysis.total_revenue}}",
+            "Expenses": "{{financial_analysis.total_expenses}}",
+            "Net": "{{financial_analysis.net_income}}",
+            "Report": "{{pdf_report.download_url}}",
+            "Blockchain": "{{audit_trail.transaction_id}}"
+          }
+        }]
+      }
+    }
+  ]
+}

@@ -1,0 +1,22 @@
+name: Validate JSON and YAML
+on:
+  push:
+    paths: ['**.json','**.yaml','**.yml']
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate JSON
+        run: |
+          for f in $(find . -name "*.json"); do
+            echo "Validating $f"; python - <<PY
+import json,sys; json.load(open("$f"))
+PY
+          done
+      - name: Validate YAML
+        run: |
+          pipx install yamllint || pip install yamllint
+          for f in $(find . -name "*.yml" -o -name "*.yaml"); do
+            echo "Linting $f"; yamllint -d "{extends: default, rules: {line-length: disable}}" "$f"
+          done

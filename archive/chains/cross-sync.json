@@ -1,0 +1,47 @@
+{
+  "name": "cross-sync",
+  "description": "Device and state synchronization across platforms",
+  "version": "1.0.0",
+  "tools": ["register_mcp_server", "sync_mcp_state", "get_synced_servers"],
+  "parameters": {
+    "required": ["device_id", "sync_type"],
+    "optional": ["state_data", "conflict_resolution"]
+  },
+  "output": {
+    "sync_status": "string",
+    "server_count": "number",
+    "last_sync": "timestamp",
+    "conflicts": "array"
+  },
+  "steps": [
+    {
+      "step": 1,
+      "tool": "register_mcp_server",
+      "description": "Register device for sync",
+      "input": {
+        "device_id": "{{device_id}}",
+        "server_url": "{{server_url}}",
+        "capabilities": ["tools", "resources"]
+      }
+    },
+    {
+      "step": 2,
+      "tool": "sync_mcp_state",
+      "description": "Sync state across devices",
+      "input": {
+        "device_id": "{{device_id}}",
+        "state_data": "{{state_data}}",
+        "sync_type": "{{sync_type}}",
+        "conflict_resolution": "{{conflict_resolution}}"
+      }
+    },
+    {
+      "step": 3,
+      "tool": "get_synced_servers",
+      "description": "Verify sync status",
+      "input": {
+        "device_id": "{{device_id}}"
+      }
+    }
+  ]
+}

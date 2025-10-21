@@ -1,0 +1,52 @@
+# Wrangler Configuration for ChittyMCP
+# Unified MCP Server Deployment to Cloudflare Workers
+
+name = "chittymcp"
+main = "mcp-unified-consolidated/unified-server.js"
+compatibility_date = "2024-10-01"
+workers_dev = true
+
+# Account Configuration
+account_id = "bbf9fcd845e78035b7a135c481e88541"
+
+# Routes
+routes = [
+  { pattern = "mcp.chitty.cc/*", zone_name = "chitty.cc" }
+]
+
+# KV Namespaces
+[[kv_namespaces]]
+binding = "PLATFORM_KV"
+id = "d52d89c1eebd402b95719161d311e7df"
+preview_id = "d52d89c1eebd402b95719161d311e7df"
+
+[[kv_namespaces]]
+binding = "PLATFORM_CACHE"
+id = "d66c1e709c72456fa21aaa0d02f2db5e"
+preview_id = "d66c1e709c72456fa21aaa0d02f2db5e"
+
+# Environment Variables (non-sensitive)
+[env.production.vars]
+CHITTY_ENV = "production"
+CHITTYID_SERVICE = "https://id.chitty.cc"
+PORTAL_DOMAIN = "portal.chitty.cc"
+GATEWAY_SERVICE = "https://gateway.chitty.cc"
+REGISTRY_SERVICE = "https://registry.chitty.cc"
+CLOUDFLARE_ACCOUNT_ID = "bbf9fcd845e78035b7a135c481e88541"
+
+[env.staging.vars]
+CHITTY_ENV = "staging"
+CHITTYID_SERVICE = "https://id-staging.chitty.cc"
+PORTAL_DOMAIN = "portal-staging.chitty.cc"
+
+# Limits
+[limits]
+cpu_ms = 100
+
+# Build Configuration
+[build]
+command = "npm install"
+
+# Observability
+[observability]
+enabled = true

@@ -1,0 +1,60 @@
+{
+  "name": "infrastructure-deploy",
+  "description": "Cloudflare infrastructure deployment and management",
+  "version": "1.0.0",
+  "tools": [
+    "deploy_worker",
+    "manage_kv_namespace",
+    "manage_r2_bucket",
+    "execute_d1_query"
+  ],
+  "parameters": {
+    "required": ["worker_name", "environment"],
+    "optional": ["kv_namespaces", "r2_buckets", "d1_databases"]
+  },
+  "output": {
+    "deployment_id": "string",
+    "worker_url": "string",
+    "resources": "object",
+    "status": "string"
+  },
+  "steps": [
+    {
+      "step": 1,
+      "tool": "deploy_worker",
+      "description": "Deploy Cloudflare Worker",
+      "input": {
+        "worker_name": "{{worker_name}}",
+        "environment": "{{environment}}",
+        "script": "{{worker_script}}"
+      }
+    },
+    {
+      "step": 2,
+      "tool": "manage_kv_namespace",
+      "description": "Create/update KV namespaces",
+      "input": {
+        "namespaces": "{{kv_namespaces}}",
+        "worker_name": "{{worker_name}}"
+      }
+    },
+    {
+      "step": 3,
+      "tool": "manage_r2_bucket",
+      "description": "Create/update R2 buckets",
+      "input": {
+        "buckets": "{{r2_buckets}}",
+        "worker_name": "{{worker_name}}"
+      }
+    },
+    {
+      "step": 4,
+      "tool": "execute_d1_query",
+      "description": "Initialize D1 databases",
+      "input": {
+        "databases": "{{d1_databases}}",
+        "queries": ["CREATE TABLE IF NOT EXISTS ..."]
+      }
+    }
+  ]
+}

@@ -1,0 +1,219 @@
+# ChittyMCP Integration Configuration
+# Multi-Platform MCP Server for AI Assistants
+
+service: chittymcp
+version: 3.1.0
+account_id: 0bc21e3a5a9de1a4cc843be9c3e98121
+
+## Endpoints
+endpoints:
+  production:
+    direct: https://chittymcp.chittycorp-llc.workers.dev
+    custom: https://mcp.chitty.cc
+    status: pending_dns_configuration
+
+## Bindings
+kv_namespaces:
+  - name: PLATFORM_KV
+    id: d52d89c1eebd402b95719161d311e7df
+    purpose: Cross-device synchronization storage
+
+  - name: PLATFORM_CACHE
+    id: d66c1e709c72456fa21aaa0d02f2db5e
+    purpose: Request caching and rate limiting
+
+## Required API Token Scopes
+required_scopes:
+  - zone:read        # Read zone information for chitty.cc
+  - zone:edit        # Add DNS CNAME record
+  - workers_routes:write  # Configure custom domain route
+  - workers_scripts:write # Deploy worker updates
+  - workers_kv:write      # KV namespace operations
+  - workers_tail:read     # Monitor logs
+
+## Platform Support Matrix
+platforms:
+  claude:
+    desktop: ✓
+    mobile: ✓
+    web: ✓
+    auth: Bearer token via CHITTY_ID_TOKEN
+
+  chatgpt:
+    desktop: ✓
+    mobile: ✓
+    web: ✓
+    auth: OAuth 2.0 flow
+    plugin_manifest: /.well-known/ai-plugin.json
+
+  customgpt:
+    supported: ✓
+    auth: API key
+    openapi_spec: /openapi.json
+
+  openai_codex:
+    supported: ✓
+    auth: Bearer token
+    functions_endpoint: /v1/functions
+
+## CORS Configuration
+cors:
+  allowed_origins: "*"
+  allowed_methods:
+    - GET
+    - POST
+    - PUT
+    - DELETE
+    - OPTIONS
+  allowed_headers:
+    - Content-Type
+    - Authorization
+  max_age: 86400
+
+## Rate Limiting (via PLATFORM_CACHE)
+rate_limits:
+  default:
+    requests: 1000
+    window: 60  # seconds
+
+  by_endpoint:
+    "/tools/execute":
+      requests: 100
+      window: 60
+
+    "/executive/*":
+      requests: 50
+      window: 60
+
+## Sample API Calls
+
+### 1. Health Check
+```bash
+# Direct URL
+curl https://chittymcp.chittycorp-llc.workers.dev/health
+
+# Custom domain (after DNS configured)
+curl https://mcp.chitty.cc/health
+```
+
+### 2. List MCP Tools
+```bash
+curl -X POST https://mcp.chitty.cc/tools/list \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $CHITTY_ID_TOKEN" \
+  -d '{}'
+```
+
+### 3. Execute Executive Tool
+```bash
+curl -X POST https://mcp.chitty.cc/tools/execute \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $CHITTY_ID_TOKEN" \
+  -d '{
+    "name": "executive_decision",
+    "arguments": {
+      "title": "Infrastructure Migration",
+      "options": ["AWS", "Cloudflare", "Azure"],
+      "criteria": ["Cost", "Performance", "Scalability"]
+    }
+  }'
+```
+
+### 4. ChatGPT Plugin Manifest
+```bash
+curl https://mcp.chitty.cc/.well-known/ai-plugin.json
+```
+
+### 5. OpenAPI Specification (CustomGPT)
+```bash
+curl https://mcp.chitty.cc/openapi.json
+```
+
+### 6. Cross-Device Sync
+```bash
+# Register device
+curl -X POST https://mcp.chitty.cc/cross-sync/register \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $CHITTY_ID_TOKEN" \
+  -d '{
+    "device_name": "Claude Desktop",
+    "platform": "macos"
+  }'
+
+# Sync state
+curl -X POST https://mcp.chitty.cc/cross-sync/state \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $CHITTY_ID_TOKEN" \
+  -d '{
+    "device_id": "DEVICE_ID_HERE",
+    "state": {"current_project": "chittyos"}
+  }'
+```
+
+## Worker Fetch Examples
+
+### From Within Another Worker
+```javascript
+// Health check
+const response = await fetch('https://mcp.chitty.cc/health', {
+  headers: {
+    'User-Agent': 'ChittyOS/1.0'
+  }
+});
+
+// Execute tool
+const toolResponse = await fetch('https://mcp.chitty.cc/tools/execute', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${env.CHITTY_ID_TOKEN}`
+  },
+  body: JSON.stringify({
+    name: 'chittyid_mint',
+    arguments: {
+      type: 'session',
+      metadata: { platform: 'cloudflare' }
+    }
+  })
+});
+```
+
+## Dataflow Architecture
+```
+┌─────────────┐     ┌──────────────┐     ┌─────────────┐
+│   Claude    │────▶│   ChittyMCP  │────▶│  ChittyID   │
+│  Desktop    │     │    Worker    │     │   Service   │
+└─────────────┘     └──────────────┘     └─────────────┘
+                           │
+                           ▼
+                    ┌──────────────┐
+                    │   KV Store   │
+                    │ (Cross-Sync) │
+                    └──────────────┘
+                           │
+      ┌────────────────────┼────────────────────┐
+      ▼                    ▼                    ▼
+┌─────────────┐     ┌──────────────┐     ┌─────────────┐
+│   ChatGPT   │     │  CustomGPT   │     │OpenAI Codex │
+│   Desktop   │     │   Platform   │     │  Platform   │
+└─────────────┘     └──────────────┘     └─────────────┘
+```
+
+## Deployment Commands
+```bash
+# Deploy with route
+wrangler deploy
+
+# Monitor logs
+wrangler tail chittymcp --format pretty
+
+# Update secrets
+wrangler secret put CHITTY_ID_TOKEN
+wrangler secret put NEON_DATABASE_URL
+```
+
+## Monitoring & Observability
+- Logs: `wrangler tail chittymcp`
+- Metrics: Cloudflare Analytics Dashboard
+- Errors: Sentry integration (if configured)
+- Performance: Web Analytics

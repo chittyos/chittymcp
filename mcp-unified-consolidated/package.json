@@ -1,0 +1,52 @@
+{
+  "name": "@mcp/unified-consolidated",
+  "version": "3.0.0",
+  "description": "Unified MCP server with all ChittyOS connectors, finance tools, and AI capabilities",
+  "main": "unified-server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node unified-server.js",
+    "dev": "nodemon unified-server.js",
+    "cli": "node cli.js",
+    "test": "node --test",
+    "lint": "eslint .",
+    "format": "prettier --write ."
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "chittyos",
+    "ai",
+    "cloudflare",
+    "legal-tech"
+  ],
+  "author": "ChittyOS Framework",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^0.5.0",
+    "@anthropic-ai/sdk": "^0.24.0",
+    "openai": "^4.52.0",
+    "node-fetch": "^3.3.2",
+    "fs-extra": "^11.2.0",
+    "pg": "^8.12.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "commander": "^12.0.0",
+    "chalk": "^5.3.0",
+    "inquirer": "^9.2.0",
+    "cli-table3": "^0.6.3",
+    "ora": "^8.0.0",
+    "nodemon": "^3.0.0",
+    "eslint": "^8.50.0",
+    "prettier": "^3.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/chittyos/chittymcp.git",
+    "directory": "mcp-unified-consolidated"
+  }
+}

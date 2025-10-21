@@ -1,0 +1,83 @@
+{
+  "name": "contract_to_deployment",
+  "description": "Generate contract, get approval, deploy infrastructure",
+  "chain": [
+    {
+      "server": "legal",
+      "tool": "generate_document",
+      "params": {
+        "type": "service_agreement",
+        "client": "{{client_name}}",
+        "terms": "{{service_terms}}"
+      },
+      "output_to": "contract"
+    },
+    {
+      "server": "executive",
+      "tool": "cfo_analysis",
+      "params": {
+        "document_id": "{{contract.id}}",
+        "revenue_projection": "{{contract.value}}"
+      },
+      "output_to": "financial_review"
+    },
+    {
+      "server": "executive",
+      "tool": "ceo_decision",
+      "params": {
+        "contract": "{{contract.id}}",
+        "cfo_recommendation": "{{financial_review.recommendation}}"
+      },
+      "output_to": "approval"
+    },
+    {
+      "server": "cloudflare",
+      "tool": "workers_create",
+      "params": {
+        "name": "{{client_name}}-api",
+        "script": "export default { fetch() { return new Response('Service Active') } }"
+      },
+      "output_to": "worker"
+    },
+    {
+      "server": "neon",
+      "tool": "d1_database_create",
+      "params": {
+        "name": "{{client_name}}-db",
+        "schema": "CREATE TABLE contracts (id TEXT PRIMARY KEY, data JSON)"
+      },
+      "output_to": "database"
+    },
+    {
+      "server": "notion",
+      "tool": "notion-create-pages",
+      "params": {
+        "pages": [{
+          "properties": {
+            "title": "{{client_name}} Project",
+            "Contract": "{{contract.url}}",
+            "Worker": "{{worker.url}}",
+            "Database": "{{database.connection_string}}",
+            "Status": "Active"
+          }
+        }]
+      },
+      "output_to": "project_page"
+    },
+    {
+      "server": "legal",
+      "tool": "chain_record",
+      "params": {
+        "type": "contract_deployment",
+        "contract_id": "{{contract.id}}",
+        "infrastructure": {
+          "worker": "{{worker.id}}",
+          "database": "{{database.id}}"
+        },
+        "hash": true,
+        "immutable": true
+      },
+      "output_to": "blockchain_record"
+    }
+  ]
+}
