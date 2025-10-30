@@ -38,3 +38,11 @@ coverage/
 # Temporary
 tmp/
 temp/
+
+# Diagnostic reports
+mcp-diagnostics-*.txt
+mcp-diagnostics-*.html
+
+# Backups
+.backups/
+*.bak
