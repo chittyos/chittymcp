@@ -30,7 +30,7 @@ BASE_URL="https://api.cloudflare.com/client/v4"
 # Configuration
 PORTAL_NAME="ChittyMCP Unified Portal"
 PORTAL_DOMAIN="mcp.chitty.cc"  # Change if needed
-USER_EMAIL="${USER_EMAIL:-nichobianchi@gmail.com}"
+USER_EMAIL="${USER_EMAIL:-nick@chittycorp.com}"
 
 echo -e "${GREEN}Creating Cloudflare MCP Portal...${NC}"
 echo "Account: $ACCOUNT_ID"
