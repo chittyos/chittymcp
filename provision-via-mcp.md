@@ -90,7 +90,7 @@ Arguments:
   "decision": "allow",
   "include": [{
     "email": {
-      "email": "nick@chittycorp.com"
+      "email": "<USER_EMAIL>"
     }
   }],
   "precedence": 2

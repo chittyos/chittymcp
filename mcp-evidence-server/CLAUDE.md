@@ -163,7 +163,7 @@ Start real-time monitoring of a directory for new evidence files.
 **Example**:
 ```javascript
 await start_intake_monitoring({
-  sourceDir: "/Users/nb/Library/CloudStorage/GoogleDrive-nichobianchi@gmail.com/Shared drives/Arias V Bianchi"
+  sourceDir: "/Users/nb/Library/CloudStorage/GoogleDrive-<USER_EMAIL>/Shared drives/Arias V Bianchi"
 });
 ```
 

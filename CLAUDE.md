@@ -173,7 +173,7 @@ ChittyMCP supports complex multi-tool workflows called "chains" defined in `conf
 
 **Google Drive**
 - Evidence source monitoring
-- Path: `/Users/nb/Library/CloudStorage/GoogleDrive-nichobianchi@gmail.com/Shared drives/Arias V Bianchi`
+- Path: `/Users/nb/Library/CloudStorage/GoogleDrive-<USER_EMAIL>/Shared drives/Arias V Bianchi`
 
 **Cloudflare Workers**
 - Deployment target: `chittymcp.chittycorp-llc.workers.dev`
