@@ -1,0 +1,85 @@
+version: '3.8'
+
+services:
+  chittymcp:
+    image: chittyos/mcp-extension:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: chittyos-mcp
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - CHITTY_ID_TOKEN=${CHITTY_ID_TOKEN}
+      - CHITTY_ID_SERVICE=${CHITTY_ID_SERVICE:-https://id.chitty.cc}
+      - ENVIRONMENT=${ENVIRONMENT:-production}
+      - R2_ENDPOINT=${R2_ENDPOINT}
+      - R2_ACCESS_KEY=${R2_ACCESS_KEY}
+      - R2_SECRET_KEY=${R2_SECRET_KEY}
+      - NEON_CONNECTION_STRING=${NEON_CONNECTION_STRING}
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    networks:
+      - chittyos
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('./chittymcp.js'); process.exit(0);"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+
+  # Optional: Nginx reverse proxy for web access
+  nginx:
+    image: nginx:alpine
+    container_name: chittyos-nginx
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - chittymcp
+    networks:
+      - chittyos
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Optional: Redis for caching
+  redis:
+    image: redis:alpine
+    container_name: chittyos-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - redis-data:/data
+    networks:
+      - chittyos
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+networks:
+  chittyos:
+    driver: bridge
+
+volumes:
+  redis-data:

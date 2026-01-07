@@ -1,0 +1,58 @@
+name = "chatgpt-mcp-gateway"
+main = "src/index.js"
+compatibility_date = "2024-11-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Account ID
+account_id = "0bc21e3a5a9de1a4cc843be9c3e98121"
+
+# Staging environment
+[env.staging]
+name = "chatgpt-mcp-gateway-staging"
+
+[env.staging.vars]
+MCP_VERSION = "2024-11-05"
+CORS_ORIGINS = "https://chat.openai.com,https://chatgpt.com"
+
+[[env.staging.routes]]
+pattern = "mcp-staging.chitty.cc/*"
+zone_name = "chitty.cc"
+
+# Production environment
+[env.production]
+name = "chatgpt-mcp-gateway"
+
+[env.production.vars]
+MCP_VERSION = "2024-11-05"
+CORS_ORIGINS = "https://chat.openai.com,https://chatgpt.com"
+
+[[env.production.routes]]
+pattern = "mcp.chitty.cc/*"
+zone_name = "chitty.cc"
+
+# KV namespace for session management (create if needed)
+# Run: wrangler kv:namespace create "SESSIONS" --preview false
+# [[env.staging.kv_namespaces]]
+# binding = "SESSIONS"
+# id = "TBD"
+
+# [[env.production.kv_namespaces]]
+# binding = "SESSIONS"
+# id = "TBD"
+
+# Environment variables (non-secret)
+[vars]
+MCP_VERSION = "2024-11-05"
+CORS_ORIGINS = "https://chat.openai.com,https://chatgpt.com"
+
+# Required secrets (set with: wrangler secret put SECRET_NAME)
+# NEON_DATABASE_URL - Neon PostgreSQL connection string
+# CHITTY_ID_SERVICE_TOKEN - ChittyID service authentication
+# CHITTY_AUTH_SERVICE_TOKEN - ChittyAuth service authentication
+# CHITTY_VERIFY_SERVICE_TOKEN - ChittyVerify service authentication
+# CHITTY_SCORE_SERVICE_TOKEN - ChittyScore service authentication
+# CHITTY_CHRONICLE_SERVICE_TOKEN - ChittyChronicle service authentication
+# CHITTY_ROUTER_SERVICE_TOKEN - ChittyRouter service authentication
+# CHITTY_CONNECT_SERVICE_TOKEN - ChittyConnect service authentication
+# CHITTY_REGISTRY_SERVICE_TOKEN - ChittyRegistry service authentication
+# MCP_API_KEY - API key for ChatGPT MCP connector authentication

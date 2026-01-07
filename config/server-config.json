@@ -1,0 +1,98 @@
+{
+  "version": "3.0.0",
+  "description": "ChittyMCP Server Configuration",
+  "servers": {
+    "unified": {
+      "name": "chittymcp-unified",
+      "version": "3.0.0",
+      "description": "Unified MCP server with all tools and chains",
+      "entry_point": "src/servers/unified-server.js",
+      "tool_categories": ["evidence", "legal", "infrastructure", "sync"],
+      "features": {
+        "chain_execution": true,
+        "dynamic_loading": true,
+        "hot_reload": false
+      }
+    },
+    "evidence": {
+      "name": "evidence-intake",
+      "version": "1.0.0",
+      "description": "Standalone evidence intake server",
+      "entry_point": "src/servers/evidence-server.js",
+      "tool_categories": ["evidence"],
+      "features": {
+        "chain_execution": false,
+        "dynamic_loading": false,
+        "hot_reload": false
+      }
+    }
+  },
+  "tool_categories": {
+    "evidence": {
+      "name": "Evidence Tools",
+      "description": "Legal evidence intake and management",
+      "tool_count": 4,
+      "tools": [
+        "intake_evidence",
+        "list_evidence",
+        "get_evidence_stats",
+        "start_intake_monitoring"
+      ]
+    },
+    "legal": {
+      "name": "Legal Tools",
+      "description": "Legal case management and compliance",
+      "tool_count": 4,
+      "tools": [
+        "generate_chitty_id",
+        "create_legal_case",
+        "analyze_document",
+        "compliance_check"
+      ]
+    },
+    "infrastructure": {
+      "name": "Infrastructure Tools",
+      "description": "Cloudflare resource management",
+      "tool_count": 4,
+      "tools": [
+        "deploy_worker",
+        "manage_kv_namespace",
+        "manage_r2_bucket",
+        "execute_d1_query"
+      ]
+    },
+    "sync": {
+      "name": "Sync Tools",
+      "description": "Cross-device state synchronization",
+      "tool_count": 3,
+      "tools": [
+        "register_mcp_server",
+        "sync_mcp_state",
+        "get_synced_servers"
+      ]
+    }
+  },
+  "environment": {
+    "development": {
+      "LOG_LEVEL": "DEBUG",
+      "CHITTY_ENV": "development"
+    },
+    "production": {
+      "LOG_LEVEL": "INFO",
+      "CHITTY_ENV": "production"
+    }
+  },
+  "integrations": {
+    "chittyid": {
+      "service_url": "https://id.chitty.cc",
+      "required": true
+    },
+    "cloudflare": {
+      "account_id": "bbf9fcd845e78035b7a135c481e88541",
+      "required": false
+    },
+    "notion": {
+      "required": false
+    }
+  }
+}

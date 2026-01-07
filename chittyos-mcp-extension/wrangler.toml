@@ -1,0 +1,13 @@
+name = "chittymcp-extension-121"
+main = "worker.js"
+compatibility_date = "2024-09-28"
+compatibility_flags = ["nodejs_compat"]
+account_id = "0bc21e3a5a9de1a4cc843be9c3e98121"
+
+# Environment variables for Cloudflare deployment
+[vars]
+CHITTY_ID_SERVICE = "https://id.chitty.cc"
+CHITTYAUTH_URL = "https://chittyauth-mcp-121.chittycorp-llc.workers.dev"
+ENVIRONMENT = "production"
+CLOUDFLARE_ACCOUNT_ID = "0bc21e3a5a9de1a4cc843be9c3e98121"
+MCP_PORTAL_MODE = "true"

@@ -1,6 +1,6 @@
-# ChittyMCP - Model Context Protocol Servers
+# ChittyMCP - Consolidated MCP Servers
 
-MCP server implementations for the ChittyOS ecosystem.
+**Version 3.0.0** - Modular, consolidated Model Context Protocol servers for the ChittyOS ecosystem.
 
 [![ChittyOS Framework](https://img.shields.io/badge/ChittyOS-v1.0.1-blue)](https://chitty.cc)
 [![MCP SDK](https://img.shields.io/badge/MCP%20SDK-0.5.0-green)](https://modelcontextprotocol.io)
@@ -8,51 +8,82 @@ MCP server implementations for the ChittyOS ecosystem.
 
 ---
 
+## ✨ What's New in v3.0.0
+
+**Modular Architecture** - Completely refactored with:
+- ✅ **Core module** with reusable MCP server base class
+- ✅ **Dynamic tool loading** - add tools without touching core code
+- ✅ **Integration layer** - centralized ChittyOS service clients
+- ✅ **Chain execution** - multi-tool workflow orchestration
+- ✅ **15+ tools** across 4 domains (evidence, legal, infrastructure, sync)
+
+**New Structure**:
+```
+src/
+├── core/           # Shared utilities (BaseMCPServer, ToolLoader, ChainExecutor)
+├── integration/    # Service clients (ChittyID, Cloudflare, Notion)
+├── tools/          # Modular tools (evidence, legal, infrastructure, sync)
+└── servers/        # Server implementations (unified, evidence)
+```
+
+---
+
 ## Status
 
-| Server | Status | Tools | Implementation |
-|--------|--------|-------|----------------|
-| Evidence Intake | ✅ Working | 4 | Fully implemented |
-| Unified Consolidated | 🟡 Partial | 19 | Schema defined, most handlers are placeholders |
-| MCP Exec | ✅ Working | 3 | Fully implemented |
+| Component | Status | Description |
+|-----------|--------|-------------|
+| **Core Module** | ✅ Complete | BaseMCPServer, ToolLoader, ChainExecutor, Logger |
+| **Integration Layer** | ✅ Complete | ChittyID, Cloudflare, Notion clients |
+| **Evidence Tools** | ✅ Complete | 4 tools - fully implemented |
+| **Legal Tools** | ✅ Complete | 4 tools - ChittyID integration working |
+| **Infrastructure Tools** | ✅ Complete | 4 tools - Cloudflare API integration |
+| **Sync Tools** | ✅ Complete | 3 tools - device sync framework |
+| **Unified Server** | ✅ Complete | Dynamic loading, chain execution |
+| **Evidence Server** | ✅ Complete | Standalone server using modular tools |
 
 ---
 
 ## Quick Start
 
-### 1. Set up environment
+### Installation
 
 ```bash
-# Copy environment template
-cp .env.example .env
-
-# Edit with your credentials
-nano .env
+# Install dependencies
+npm install
 ```
 
-**Required variables**:
-- `CHITTY_ID_TOKEN` - ChittyID service auth token
-- `CLOUDFLARE_API_TOKEN` - Cloudflare API token
-- `NEON_DATABASE_URL` - PostgreSQL connection string
-
-### 2. Install and run
+### Running Servers
 
 ```bash
-# Evidence Intake Server (works)
-cd mcp-evidence-server
-npm install
-node index.js
+# Unified server (all 15+ tools + chain execution)
+npm start
 
-# Unified Server (mostly placeholders)
-cd mcp-unified-consolidated
-npm install
-node unified-server.js
+# Evidence server only (4 tools)
+npm start:evidence
 
-# MCP Exec (works)
-cd services/mcp-exec
-npm install
-npm run build
-node dist/index.js
+# Development mode with auto-reload
+npm run dev
+npm run dev:evidence
+```
+
+### Environment Variables
+
+```bash
+# ChittyOS Core
+CHITTY_ID_TOKEN=<service token from ChittyID>
+CHITTYID_SERVICE=https://id.chitty.cc
+CHITTY_ENV=production
+
+# Cloudflare (optional)
+CLOUDFLARE_API_TOKEN=<api token>
+CLOUDFLARE_ACCOUNT_ID=bbf9fcd845e78035b7a135c481e88541
+
+# Notion (optional)
+NOTION_TOKEN=<integration token>
+NOTION_DATABASE_ID=<database id>
+
+# Logging
+LOG_LEVEL=INFO  # DEBUG|INFO|WARN|ERROR
 ```
 
 ---
@@ -175,32 +206,29 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 ```json
 {
   "mcpServers": {
-    "evidence-intake": {
-      "command": "node",
-      "args": ["/absolute/path/to/chittymcp/mcp-evidence-server/index.js"],
-      "env": {
-        "NEON_DATABASE_URL": "${NEON_DATABASE_URL}"
-      }
-    },
     "chittymcp-unified": {
       "command": "node",
-      "args": ["/absolute/path/to/chittymcp/mcp-unified-consolidated/unified-server.js"],
+      "args": ["/absolute/path/to/chittymcp/src/servers/unified-server.js"],
       "env": {
-        "CHITTY_ID_TOKEN": "${CHITTY_ID_TOKEN}"
+        "CHITTY_ID_TOKEN": "${CHITTY_ID_TOKEN}",
+        "CLOUDFLARE_API_TOKEN": "${CLOUDFLARE_API_TOKEN}",
+        "LOG_LEVEL": "INFO"
       }
     },
-    "mcp-exec": {
+    "evidence-intake": {
       "command": "node",
-      "args": ["/absolute/path/to/chittymcp/services/mcp-exec/dist/index.js"],
-      "env": {
-        "CHITTY_ID_TOKEN": "${CHITTY_ID_TOKEN}"
-      }
+      "args": ["/absolute/path/to/chittymcp/src/servers/evidence-server.js"],
+      "env": {}
     }
   }
 }
 ```
 
 **Replace** `/absolute/path/to/` with your actual path.
+
+**Legacy servers** (still functional):
+- `mcp-evidence-server/index.js` → Use `src/servers/evidence-server.js` instead
+- `mcp-unified-consolidated/unified-server.js` → Use `src/servers/unified-server.js` instead
 
 ---
 
@@ -327,24 +355,119 @@ Files are automatically categorized based on filename patterns.
 
 ---
 
+## Architecture
+
+### Modular Design
+
+```
+chittymcp/
+├── src/
+│   ├── core/                    # Shared core utilities
+│   │   ├── mcp-server.js       # BaseMCPServer class
+│   │   ├── tool-loader.js      # Dynamic tool loading
+│   │   ├── chain-executor.js   # Multi-tool workflows
+│   │   └── logger.js           # Centralized logging
+│   ├── integration/            # ChittyOS service clients
+│   │   ├── chittyid-client.js  # ChittyID service
+│   │   ├── cloudflare-client.js # Cloudflare API
+│   │   └── notion-client.js    # Notion integration
+│   ├── tools/                  # Tool modules by domain
+│   │   ├── evidence/           # 4 evidence tools
+│   │   ├── legal/              # 4 legal tools
+│   │   ├── infrastructure/     # 4 infrastructure tools
+│   │   └── sync/               # 3 sync tools
+│   └── servers/                # Server implementations
+│       ├── unified-server.js   # Full consolidated server
+│       └── evidence-server.js  # Standalone evidence server
+├── config/
+│   ├── chains.json             # Workflow chain definitions
+│   └── server-config.json      # Server configuration
+└── Legacy (backwards compatible):
+    ├── mcp-evidence-server/
+    └── mcp-unified-consolidated/
+```
+
+### Benefits
+
+- **Code Reuse**: Shared utilities across all servers
+- **Easy Extension**: Add new tools without touching core
+- **Clean Separation**: Tools, integrations, and core separated
+- **Dynamic Loading**: Tools loaded at runtime
+- **Chain Execution**: Complex workflows from simple tools
+
+## Adding New Tools
+
+1. Create tool module in `src/tools/<category>/`:
+
+```javascript
+// src/tools/mycategory/index.js
+export const tools = [{
+  name: "my_tool",
+  description: "What my tool does",
+  inputSchema: { /* ... */ }
+}];
+
+export { handlers } from "./handlers.js";
+
+// src/tools/mycategory/handlers.js
+export const handlers = {
+  async my_tool(args) {
+    return {
+      content: [{
+        type: "text",
+        text: "Result"
+      }]
+    };
+  }
+};
+```
+
+2. Restart server - tools are loaded automatically!
+
+## Workflow Chains
+
+Execute multi-tool workflows defined in `config/chains.json`:
+
+```javascript
+// Execute a chain
+await execute_chain({
+  chain_name: "legal-workflow",
+  parameters: {
+    case_type: "civil",
+    documents: ["/path/to/filing.pdf"],
+    client_id: "CHITTY-PEO-..."
+  }
+});
+```
+
+**Available chains**:
+- `executive-decision` - Strategic decision-making workflow
+- `legal-workflow` - Complete legal case management
+- `infrastructure-deploy` - Cloudflare deployment
+- `cross-sync` - Device synchronization
+- `full-orchestration` - All tools combined
+
 ## Roadmap
 
-**Completed**:
-- [x] Evidence Intake Server (4 tools, fully working)
-- [x] MCP Exec Service (3 tools, fully working)
-- [x] Unified Server tool schemas (19 tools)
-- [x] Chain workflow definitions
+**v3.0.0 - Completed** ✅:
+- [x] Modular architecture with core/tools/integration layers
+- [x] Dynamic tool loading system
+- [x] Chain execution framework
+- [x] 15+ tools across 4 domains
+- [x] ChittyID integration
+- [x] Cloudflare API integration
+- [x] Unified and standalone servers
 
-**In Progress**:
-- [ ] Unified Server real implementations (currently placeholders)
+**Next (v3.1.0)**:
+- [ ] Executive tool AI integration (Anthropic/OpenAI)
 - [ ] ChittyLedger PostgreSQL integration
-- [ ] Cloudflare API integration
-- [ ] AI service integration (OpenAI, Anthropic)
-
-**Planned**:
-- [ ] Multi-platform sync (ChatGPT, CustomGPT)
+- [ ] Hot reload for tool modules
 - [ ] Web API gateway
+
+**Future (v4.0.0)**:
+- [ ] Multi-platform sync (ChatGPT, CustomGPT)
 - [ ] Evidence monitoring automation
+- [ ] Advanced chain orchestration (rollback, parallel execution)
 
 ---
 
