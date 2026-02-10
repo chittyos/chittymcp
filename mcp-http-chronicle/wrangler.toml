@@ -11,3 +11,7 @@ routes = [
 
 # Staging environment
 [env.staging]
+
+# ChittyTrack observability
+[[tail_consumers]]
+service = "chittytrack"

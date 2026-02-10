@@ -11,3 +11,6 @@ CHITTYAUTH_URL = "https://chittyauth-mcp-121.chittycorp-llc.workers.dev"
 ENVIRONMENT = "production"
 CLOUDFLARE_ACCOUNT_ID = "0bc21e3a5a9de1a4cc843be9c3e98121"
 MCP_PORTAL_MODE = "true"
+# ChittyTrack observability
+[[tail_consumers]]
+service = "chittytrack"

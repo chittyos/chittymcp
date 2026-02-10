@@ -50,3 +50,7 @@ command = "npm install"
 # Observability
 [observability]
 enabled = true
+
+# ChittyTrack observability
+[[tail_consumers]]
+service = "chittytrack"

@@ -54,3 +54,7 @@ CORS_ORIGINS = "https://chat.openai.com,https://chatgpt.com"
 # CHITTY_CONNECT_SERVICE_TOKEN - ChittyConnect service authentication
 # CHITTY_REGISTRY_SERVICE_TOKEN - ChittyRegistry service authentication
 # MCP_API_KEY - API key for ChatGPT MCP connector authentication
+
+# ChittyTrack observability
+[[tail_consumers]]
+service = "chittytrack"
