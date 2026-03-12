@@ -1,0 +1,23 @@
+// chronicle-mcp-http — Cloudflare Workers configuration
+{
+  "name": "chronicle-mcp-http",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-01-01",
+  "account_id": "0bc21e3a5a9de1a4cc843be9c3e98121",
+  "env": {
+    "production": {
+      "routes": [
+        {
+          "pattern": "mcp-chronicle.chitty.cc",
+          "custom_domain": true
+        }
+      ]
+    },
+    "staging": {}
+  },
+  "tail_consumers": [
+    {
+      "service": "chittytrack"
+    }
+  ]
+}
