@@ -13,6 +13,7 @@ import { chittyConnectTools } from './chittyconnect-tools.js';
 import { chittyRouterTools } from './chittyrouter-tools.js';
 import { chittyRegistryTools } from './chittyregistry-tools.js';
 import { consciousnessTools } from './consciousness-tools.js';
+import { chittyDisputesTools } from './chittydisputes-tools.js';
 
 class ToolRegistry {
   constructor() {
@@ -35,7 +36,8 @@ class ToolRegistry {
       chittyConnectTools,
       chittyRouterTools,
       chittyRegistryTools,
-      consciousnessTools
+      consciousnessTools,
+      chittyDisputesTools
     ];
 
     for (const toolGroup of toolGroups) {

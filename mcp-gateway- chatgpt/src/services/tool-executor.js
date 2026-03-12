@@ -5,6 +5,15 @@
 
 import { toolRegistry } from '../tools/registry.js';
 import { neon } from '@neondatabase/serverless';
+import {
+  disputeCreate,
+  disputeGet,
+  disputeList,
+  disputeUpdate,
+  disputeAddEvent,
+  disputeTimeline,
+  disputeSummary
+} from './disputes-handler.js';
 
 /**
  * Execute a tool call
@@ -36,7 +45,7 @@ export async function executeToolCall(toolName, args, env, authContext) {
 }
 
 /**
- * Execute database-direct tool (ChittyChronicle, ChittyQuality)
+ * Execute database-direct tool (ChittyChronicle, ChittyQuality, ChittyDisputes)
  */
 async function executeDatabaseTool(toolName, args, env) {
   const databaseUrl = env.NEON_DATABASE_URL;
@@ -65,6 +74,28 @@ async function executeDatabaseTool(toolName, args, env) {
 
     case 'quarantine_review':
       return await quarantineReview(sql, args);
+
+    // ChittyDisputes
+    case 'chitty_dispute_create':
+      return await disputeCreate(sql, args);
+
+    case 'chitty_dispute_get':
+      return await disputeGet(sql, args);
+
+    case 'chitty_dispute_list':
+      return await disputeList(sql, args);
+
+    case 'chitty_dispute_update':
+      return await disputeUpdate(sql, args);
+
+    case 'chitty_dispute_add_event':
+      return await disputeAddEvent(sql, args);
+
+    case 'chitty_dispute_timeline':
+      return await disputeTimeline(sql, args);
+
+    case 'chitty_dispute_summary':
+      return await disputeSummary(sql);
 
     default:
       throw new Error(`Database tool not implemented: ${toolName}`);
