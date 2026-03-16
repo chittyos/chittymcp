@@ -1,0 +1,55 @@
+// chittymcp — Cloudflare Workers configuration
+{
+  "name": "chittymcp",
+  "main": "mcp-unified-consolidated/unified-server.js",
+  "compatibility_date": "2026-03-16",
+  "workers_dev": true,
+  "account_id": "bbf9fcd845e78035b7a135c481e88541",
+  // mcp.chitty.cc/* route removed — owned by chittyconnect (canonical MCP gateway)
+  "routes": [],
+  "kv_namespaces": [
+    {
+      "binding": "PLATFORM_KV",
+      "id": "d52d89c1eebd402b95719161d311e7df",
+      "preview_id": "d52d89c1eebd402b95719161d311e7df"
+    },
+    {
+      "binding": "PLATFORM_CACHE",
+      "id": "d66c1e709c72456fa21aaa0d02f2db5e",
+      "preview_id": "d66c1e709c72456fa21aaa0d02f2db5e"
+    }
+  ],
+  "env": {
+    "production": {
+      "vars": {
+        "CHITTY_ENV": "production",
+        "CHITTYID_SERVICE": "https://id.chitty.cc",
+        "PORTAL_DOMAIN": "portal.chitty.cc",
+        "GATEWAY_SERVICE": "https://gateway.chitty.cc",
+        "REGISTRY_SERVICE": "https://registry.chitty.cc",
+        "CLOUDFLARE_ACCOUNT_ID": "bbf9fcd845e78035b7a135c481e88541"
+      }
+    },
+    "staging": {
+      "vars": {
+        "CHITTY_ENV": "staging",
+        "CHITTYID_SERVICE": "https://id-staging.chitty.cc",
+        "PORTAL_DOMAIN": "portal-staging.chitty.cc"
+      }
+    }
+  },
+  "limits": {
+    "cpu_ms": 100
+  },
+  "build": {
+    "command": "npm install"
+  },
+  "observability": {
+    "enabled": true
+  },
+  "tail_consumers": [
+    {
+      "service": "chittytrack"
+    }
+  ]
+}
