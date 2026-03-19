@@ -29,6 +29,12 @@ secrets:
 github:
   repository: CHITTYOS/chittymcp
 
+context:
+  chitty_id: ${CHITTYMCP_SERVICE_ID}
+  entity_type: T
+  scope: platform
+  description: "MCP server implementations for ChittyOS ecosystem"
+
 monitoring:
   health:
     endpoint: /health
