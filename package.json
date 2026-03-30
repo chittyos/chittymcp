@@ -28,7 +28,7 @@
   "author": "ChittyOS Framework",
   "license": "MIT",
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.27.1",
+    "@modelcontextprotocol/sdk": "^1.28.0",
     "chokidar": "^5.0.0",
     "crypto": "^1.0.1",
     "fs-extra": "^11.3.4",
