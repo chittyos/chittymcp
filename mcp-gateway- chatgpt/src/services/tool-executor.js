@@ -72,18 +72,28 @@ async function executeDatabaseTool(toolName, args, env) {
 }
 
 /**
- * Execute HTTP-based tool (external service call)
+ * Service binding map — maps service names to wrangler service binding names.
+ * Same-zone Workers on routes MUST use service bindings, not URL fetch.
+ */
+const SERVICE_BINDING_MAP = {
+  'chittyid': 'SVC_CHITTYID',
+  'chittyauth': 'SVC_CHITTYAUTH',
+  'chittyconnect': 'SVC_CHITTYCONNECT',
+  'chittyrouter': 'SVC_CHITTYROUTER',
+  'chittyregistry': 'SVC_CHITTYREGISTRY',
+};
+
+/**
+ * Execute HTTP-based tool via service binding or external fetch
  */
 async function executeHttpTool(tool, args, env) {
   const serviceToken = getServiceToken(tool.service, env);
-
-  if (!serviceToken) {
-    console.warn(`No service token for ${tool.service} - attempting unauthenticated request`);
-  }
+  const bindingName = SERVICE_BINDING_MAP[tool.service];
+  const binding = bindingName ? env[bindingName] : null;
 
   const headers = {
     'Content-Type': 'application/json',
-    'User-Agent': 'ChatGPT-MCP-Gateway/1.0'
+    'User-Agent': 'ChittyMCP-Gateway/1.0'
   };
 
   if (serviceToken) {
@@ -91,11 +101,25 @@ async function executeHttpTool(tool, args, env) {
   }
 
   try {
-    const response = await fetch(tool.endpoint, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(args)
-    });
+    let response;
+
+    if (binding) {
+      // Use service binding for same-zone Workers (avoids route-to-route fetch issue)
+      const url = new URL(tool.endpoint);
+      response = await binding.fetch(new Request(url.pathname + url.search, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(args)
+      }));
+    } else {
+      // External service — direct fetch is fine
+      console.warn(`No service binding for ${tool.service} — using direct fetch to ${tool.endpoint}`);
+      response = await fetch(tool.endpoint, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(args)
+      });
+    }
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -244,27 +268,52 @@ async function chronicleSearch(sql, args) {
  * Get timeline for entity
  */
 async function chronicleTimeline(sql, args) {
-  const { entityId, startDate, endDate, services, groupBy } = args;
+  const { entityId, startDate, endDate, services } = args;
 
-  let whereClauses = [`entity_id = ${entityId}`];
-
-  if (startDate) {
-    whereClauses.push(`created_at >= '${startDate}'`);
+  if (!entityId) {
+    throw new Error('entityId is required');
   }
 
-  if (endDate) {
-    whereClauses.push(`created_at <= '${endDate}'`);
-  }
+  let results;
 
-  if (services && services.length > 0) {
-    whereClauses.push(`service IN (${services.map(s => `'${s}'`).join(', ')})`);
+  if (services && services.length > 0 && startDate && endDate) {
+    results = await sql`
+      SELECT * FROM chronicle_events
+      WHERE entity_id = ${entityId}
+        AND created_at >= ${startDate}
+        AND created_at <= ${endDate}
+        AND service = ANY(${services})
+      ORDER BY created_at ASC
+    `;
+  } else if (startDate && endDate) {
+    results = await sql`
+      SELECT * FROM chronicle_events
+      WHERE entity_id = ${entityId}
+        AND created_at >= ${startDate}
+        AND created_at <= ${endDate}
+      ORDER BY created_at ASC
+    `;
+  } else if (startDate) {
+    results = await sql`
+      SELECT * FROM chronicle_events
+      WHERE entity_id = ${entityId}
+        AND created_at >= ${startDate}
+      ORDER BY created_at ASC
+    `;
+  } else if (endDate) {
+    results = await sql`
+      SELECT * FROM chronicle_events
+      WHERE entity_id = ${entityId}
+        AND created_at <= ${endDate}
+      ORDER BY created_at ASC
+    `;
+  } else {
+    results = await sql`
+      SELECT * FROM chronicle_events
+      WHERE entity_id = ${entityId}
+      ORDER BY created_at ASC
+    `;
   }
-
-  const results = await sql.unsafe(`
-    SELECT * FROM chronicle_events
-    WHERE ${whereClauses.join(' AND ')}
-    ORDER BY created_at ASC
-  `);
 
   return {
     success: true,

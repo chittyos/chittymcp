@@ -37,9 +37,9 @@ app.use('/*', logger());
  */
 app.get('/health', (c) => {
   return c.json({
-    status: 'healthy',
-    service: 'ChatGPT MCP Gateway',
-    version: '1.0.0',
+    status: 'ok',
+    service: 'chittymcp-gateway',
+    version: '1.1.0',
     protocol: 'MCP 2024-11-05',
     transport: 'HTTP/JSON-RPC 2.0',
     timestamp: new Date().toISOString()
@@ -361,8 +361,8 @@ app.get('/oauth/authorize', async (c) => {
  */
 app.get('/', (c) => {
   return c.json({
-    service: 'ChatGPT MCP Gateway',
-    version: '1.0.0',
+    service: 'chittymcp-gateway',
+    version: '1.1.0',
     description: 'Unified Model Context Protocol gateway for ChittyOS ecosystem',
     protocol: 'MCP 2024-11-05',
     transport: 'HTTP/JSON-RPC 2.0',

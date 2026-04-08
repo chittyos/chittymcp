@@ -1,3 +1,6 @@
+![ChittyOS](https://img.shields.io/badge/ChittyOS-service-6366F1?style=flat-square)
+![Tier](https://img.shields.io/badge/tier-3%20operational-3730A3?style=flat-square)
+
 # ChittyMCP - Consolidated MCP Servers
 
 **Version 3.0.0** - Modular, consolidated Model Context Protocol servers for the ChittyOS ecosystem.

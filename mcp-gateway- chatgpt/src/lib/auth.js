@@ -26,14 +26,10 @@ export async function authenticateRequest(c) {
   const oauthConfigured = env.OAUTH_CLIENT_ID && env.OAUTH_CLIENT_SECRET;
 
   if (!apiKey && !oauthConfigured) {
-    // No authentication configured - allow public access
-    console.warn('No authentication configured - running in public mode');
+    console.error('SECURITY: No authentication configured — rejecting request. Set MCP_API_KEY or OAUTH_CLIENT_ID/OAUTH_CLIENT_SECRET.');
     return {
-      success: true,
-      context: {
-        authenticated: false,
-        mode: 'public'
-      }
+      success: false,
+      error: 'Server authentication not configured'
     };
   }
 
