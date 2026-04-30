@@ -35,13 +35,22 @@ app.use('/*', logger());
  * Health check endpoint
  * GET /health
  */
+// Single source of truth for service identity exposed across discovery
+// endpoints (/health, /, /.well-known/mcp.json, /mcp/manifest).
+export const SERVICE_IDENTITY = {
+  name: 'chittymcp-gateway',
+  version: '1.1.0',
+  protocol: 'MCP 2024-11-05',
+  transport: 'HTTP/JSON-RPC 2.0',
+};
+
 app.get('/health', (c) => {
   return c.json({
     status: 'ok',
-    service: 'chittymcp-gateway',
-    version: '1.1.0',
-    protocol: 'MCP 2024-11-05',
-    transport: 'HTTP/JSON-RPC 2.0',
+    service: SERVICE_IDENTITY.name,
+    version: SERVICE_IDENTITY.version,
+    protocol: SERVICE_IDENTITY.protocol,
+    transport: SERVICE_IDENTITY.transport,
     timestamp: new Date().toISOString()
   });
 });
@@ -62,7 +71,8 @@ app.get('/.well-known/mcp.json', (c) => {
     grant_types_supported: ['authorization_code', 'refresh_token'],
     jwks_uri: 'https://auth.chitty.cc/v1/oauth/jwks',
     service: {
-      name: 'ChatGPT MCP Gateway',
+      name: SERVICE_IDENTITY.name,
+      version: SERVICE_IDENTITY.version,
       manifest: 'https://mcp.chitty.cc/mcp/manifest',
       sse: 'https://mcp.chitty.cc/mcp/sse'
     }
@@ -77,8 +87,8 @@ app.get('/mcp/manifest', (c) => {
   c.header('Cache-Control', 'public, max-age=300');
   return c.json({
     schema_version: '2024-11-05',
-    name: 'chittyos-unified',
-    version: '1.0.0',
+    name: SERVICE_IDENTITY.name,
+    version: SERVICE_IDENTITY.version,
     description: 'Unified MCP Gateway for ChittyOS - Consolidates all legal technology tools and services',
     capabilities: {
       tools: true,

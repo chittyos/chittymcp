@@ -30,11 +30,33 @@ binding = "SVC_CHITTYREGISTRY"
 service = "chittyregistry"
 
 # Staging environment
+# NOTE: Cloudflare named environments do NOT inherit top-level [[services]],
+# [[kv_namespaces]], or [[d1_databases]] — they must be re-declared per env.
 [env.staging]
 
 [env.staging.vars]
 MCP_VERSION = "2024-11-05"
 CORS_ORIGINS = "https://chat.openai.com,https://chatgpt.com"
+
+[[env.staging.services]]
+binding = "SVC_CHITTYID"
+service = "chittyid"
+
+[[env.staging.services]]
+binding = "SVC_CHITTYAUTH"
+service = "chittyauth"
+
+[[env.staging.services]]
+binding = "SVC_CHITTYCONNECT"
+service = "chittyconnect"
+
+[[env.staging.services]]
+binding = "SVC_CHITTYROUTER"
+service = "chittyrouter"
+
+[[env.staging.services]]
+binding = "SVC_CHITTYREGISTRY"
+service = "chittyregistry"
 
 [[env.staging.routes]]
 pattern = "mcp-chatgpt-staging.chitty.cc/*"
@@ -46,6 +68,26 @@ zone_name = "chitty.cc"
 [env.production.vars]
 MCP_VERSION = "2024-11-05"
 CORS_ORIGINS = "https://chat.openai.com,https://chatgpt.com"
+
+[[env.production.services]]
+binding = "SVC_CHITTYID"
+service = "chittyid"
+
+[[env.production.services]]
+binding = "SVC_CHITTYAUTH"
+service = "chittyauth"
+
+[[env.production.services]]
+binding = "SVC_CHITTYCONNECT"
+service = "chittyconnect"
+
+[[env.production.services]]
+binding = "SVC_CHITTYROUTER"
+service = "chittyrouter"
+
+[[env.production.services]]
+binding = "SVC_CHITTYREGISTRY"
+service = "chittyregistry"
 
 # Own hostname — does NOT conflict with mcp.chitty.cc (owned by chittyconnect)
 [[env.production.routes]]

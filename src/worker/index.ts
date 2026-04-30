@@ -20,6 +20,9 @@ interface Env {
   SVC_REGISTRY: Fetcher;
   SVC_CONNECT: Fetcher;
   SVC_CH1TTY: Fetcher;
+  // MCP_API_KEY: shared secret required for /mcp aggregator + /{service}/mcp proxy.
+  // Set via `wrangler secret put MCP_API_KEY`.
+  MCP_API_KEY?: string;
 }
 
 type BindingKey = keyof Env;
@@ -48,6 +51,38 @@ function corsHeaders(): Record<string, string> {
     "Access-Control-Allow-Headers": "Content-Type, Accept, Authorization, mcp-session-id, mcp-protocol-version",
     "Access-Control-Expose-Headers": "mcp-session-id",
   };
+}
+
+/**
+ * Fail-closed Bearer token check for MCP surface routes.
+ * Returns null on success, or a 401 Response on failure.
+ */
+function requireBearerToken(request: Request, env: Env): Response | null {
+  const expected = env.MCP_API_KEY;
+  if (!expected) {
+    // Misconfiguration: refuse to serve until the secret is provisioned.
+    return new Response(
+      JSON.stringify({
+        jsonrpc: "2.0",
+        id: null,
+        error: { code: -32001, message: "MCP_API_KEY not configured on aggregator" },
+      }),
+      { status: 503, headers: { "Content-Type": "application/json", ...corsHeaders() } },
+    );
+  }
+  const auth = request.headers.get("Authorization") || "";
+  const m = auth.match(/^Bearer\s+(.+)$/i);
+  if (!m || m[1] !== expected) {
+    return new Response(
+      JSON.stringify({
+        jsonrpc: "2.0",
+        id: null,
+        error: { code: -32001, message: "unauthorized" },
+      }),
+      { status: 401, headers: { "Content-Type": "application/json", ...corsHeaders() } },
+    );
+  }
+  return null;
 }
 
 function sseResponse(data: unknown, headers?: Record<string, string>): Response {
@@ -102,11 +137,18 @@ async function discoverTools(
       }),
     );
 
-    const text = await listResp.text();
-    const dataLine = text.split("\n").find((l) => l.startsWith("data: "));
-    if (!dataLine) return [];
-
-    const parsed = JSON.parse(dataLine.slice(6));
+    // The bound service may reply as either SSE (text/event-stream) or
+    // plain JSON-RPC (application/json) — handle both content types.
+    const contentType = listResp.headers.get("content-type") || "";
+    let parsed: any;
+    if (contentType.includes("text/event-stream")) {
+      const text = await listResp.text();
+      const dataLine = text.split("\n").find((l) => l.startsWith("data: "));
+      if (!dataLine) return [];
+      parsed = JSON.parse(dataLine.slice(6));
+    } else {
+      parsed = await listResp.json();
+    }
     const tools = parsed?.result?.tools ?? [];
     return tools.map((t: any) => ({
       ...t,
@@ -204,9 +246,11 @@ export default {
       });
     }
 
-    // Per-service proxy: /dispute/mcp → SVC_DISPUTE /mcp
+    // Per-service proxy: /dispute/mcp → SVC_DISPUTE /mcp (auth-gated)
     for (const [prefix, svc] of Object.entries(SERVICE_MAP)) {
       if (path === `/${prefix}/mcp` || path.startsWith(`/${prefix}/mcp/`)) {
+        const authErr = requireBearerToken(request, env);
+        if (authErr) return authErr;
         const service = env[svc.binding] as Fetcher;
         const newUrl = new URL(request.url);
         newUrl.pathname = path.slice(`/${prefix}`.length) || "/";
@@ -214,9 +258,21 @@ export default {
       }
     }
 
-    // Aggregated MCP at /mcp
+    // Aggregated MCP at /mcp (auth-gated)
     if ((path === "/mcp" || path.startsWith("/mcp/")) && request.method === "POST") {
-      const body = (await request.clone().json()) as any;
+      const authErr = requireBearerToken(request, env);
+      if (authErr) return authErr;
+
+      let body: any;
+      try {
+        body = await request.clone().json();
+      } catch {
+        return sseResponse({
+          jsonrpc: "2.0",
+          id: null,
+          error: { code: -32700, message: "Parse error: request body is not valid JSON" },
+        });
+      }
 
       if (body.method === "initialize") {
         return sseResponse(

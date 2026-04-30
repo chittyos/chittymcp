@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "Consolidated Model Context Protocol servers for the ChittyOS ecosystem",
   "type": "module",
-  "main": "src/worker/index.ts",
+  "main": "src/servers/unified-server.js",
   "bin": {
     "chittymcp": "./src/servers/unified-server.js",
     "chittymcp-evidence": "./src/servers/evidence-server.js"
