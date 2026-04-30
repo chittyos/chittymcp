@@ -72,18 +72,28 @@ async function executeDatabaseTool(toolName, args, env) {
 }
 
 /**
- * Execute HTTP-based tool (external service call)
+ * Service binding map — maps service names to wrangler service binding names.
+ * Same-zone Workers on routes MUST use service bindings, not URL fetch.
+ */
+const SERVICE_BINDING_MAP = {
+  'chittyid': 'SVC_CHITTYID',
+  'chittyauth': 'SVC_CHITTYAUTH',
+  'chittyconnect': 'SVC_CHITTYCONNECT',
+  'chittyrouter': 'SVC_CHITTYROUTER',
+  'chittyregistry': 'SVC_CHITTYREGISTRY',
+};
+
+/**
+ * Execute HTTP-based tool via service binding or external fetch
  */
 async function executeHttpTool(tool, args, env) {
   const serviceToken = getServiceToken(tool.service, env);
-
-  if (!serviceToken) {
-    console.warn(`No service token for ${tool.service} - attempting unauthenticated request`);
-  }
+  const bindingName = SERVICE_BINDING_MAP[tool.service];
+  const binding = bindingName ? env[bindingName] : null;
 
   const headers = {
     'Content-Type': 'application/json',
-    'User-Agent': 'ChatGPT-MCP-Gateway/1.0'
+    'User-Agent': 'ChittyMCP-Gateway/1.0'
   };
 
   if (serviceToken) {
@@ -91,11 +101,27 @@ async function executeHttpTool(tool, args, env) {
   }
 
   try {
-    const response = await fetch(tool.endpoint, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(args)
-    });
+    let response;
+
+    if (binding) {
+      // Use service binding for same-zone Workers (avoids route-to-route fetch issue).
+      // The Workers Request constructor requires an absolute URL; for service-binding
+      // calls we keep the original endpoint URL so the bound Worker sees the canonical
+      // path and host the caller intended (binding.fetch ignores network resolution).
+      response = await binding.fetch(new Request(tool.endpoint, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(args)
+      }));
+    } else {
+      // External service — direct fetch is fine
+      console.warn(`No service binding for ${tool.service} — using direct fetch to ${tool.endpoint}`);
+      response = await fetch(tool.endpoint, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(args)
+      });
+    }
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -246,32 +272,58 @@ async function chronicleSearch(sql, args) {
 async function chronicleTimeline(sql, args) {
   const { entityId, startDate, endDate, services, groupBy } = args;
 
-  let whereClauses = [`entity_id = ${entityId}`];
-
-  if (startDate) {
-    whereClauses.push(`created_at >= '${startDate}'`);
+  if (!entityId) {
+    throw new Error('entityId is required');
   }
 
-  if (endDate) {
-    whereClauses.push(`created_at <= '${endDate}'`);
+  if (groupBy && !['hour', 'day', 'week', 'month'].includes(groupBy)) {
+    throw new Error(`Invalid groupBy: ${groupBy}. Must be one of: hour, day, week, month`);
   }
 
-  if (services && services.length > 0) {
-    whereClauses.push(`service IN (${services.map(s => `'${s}'`).join(', ')})`);
-  }
+  // Use NULL coalescing to apply each filter independently — preserves all 8
+  // combinations of (services, startDate, endDate) instead of dropping the
+  // services filter when only one date bound is provided.
+  const startDateOrNull = startDate || null;
+  const endDateOrNull = endDate || null;
+  const servicesOrNull = Array.isArray(services) && services.length > 0 ? services : null;
 
-  const results = await sql.unsafe(`
-    SELECT * FROM chronicle_events
-    WHERE ${whereClauses.join(' AND ')}
-    ORDER BY created_at ASC
-  `);
+  let results;
+  if (groupBy) {
+    // Bucket events by time interval. The bucket label is derived from
+    // date_trunc(groupBy, created_at). Returns one row per bucket with
+    // event count and a summary of services involved.
+    results = await sql`
+      SELECT
+        date_trunc(${groupBy}, created_at) AS bucket,
+        COUNT(*)::int AS event_count,
+        ARRAY_AGG(DISTINCT service) AS services
+      FROM chronicle_events
+      WHERE entity_id = ${entityId}
+        AND (${startDateOrNull}::timestamptz IS NULL OR created_at >= ${startDateOrNull}::timestamptz)
+        AND (${endDateOrNull}::timestamptz IS NULL OR created_at <= ${endDateOrNull}::timestamptz)
+        AND (${servicesOrNull}::text[] IS NULL OR service = ANY(${servicesOrNull}::text[]))
+      GROUP BY bucket
+      ORDER BY bucket ASC
+    `;
+  } else {
+    results = await sql`
+      SELECT * FROM chronicle_events
+      WHERE entity_id = ${entityId}
+        AND (${startDateOrNull}::timestamptz IS NULL OR created_at >= ${startDateOrNull}::timestamptz)
+        AND (${endDateOrNull}::timestamptz IS NULL OR created_at <= ${endDateOrNull}::timestamptz)
+        AND (${servicesOrNull}::text[] IS NULL OR service = ANY(${servicesOrNull}::text[]))
+      ORDER BY created_at ASC
+    `;
+  }
 
   return {
     success: true,
     entityId,
     timeline: results,
     count: results.length,
-    timeframe: { startDate, endDate }
+    timeframe: { startDate, endDate },
+    services: servicesOrNull,
+    groupBy: groupBy || null
   };
 }
 
