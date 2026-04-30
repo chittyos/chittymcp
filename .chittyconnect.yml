@@ -1,4 +1,8 @@
 # ChittyConnect Configuration for chittymcp
+chitty_id: "03-1-USA-0000-T-2604-0-00"
+context: platform
+owner: CHITTYOS
+
 service:
   name: chittymcp
   display_name: Chittymcp
@@ -29,8 +33,7 @@ secrets:
 github:
   repository: CHITTYOS/chittymcp
 
-context:
-  chitty_id: "03-1-USA-0000-T-2604-0-00"
+chitty_context:
   entity_type: T
   scope: platform
   description: "ChittyOS MCP Aggregator — collects all service MCP endpoints into one surface at mcp.chitty.cc"
