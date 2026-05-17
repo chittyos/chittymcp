@@ -20,9 +20,6 @@ interface Env {
   SVC_REGISTRY: Fetcher;
   SVC_CONNECT: Fetcher;
   SVC_CH1TTY: Fetcher;
-  // MCP_API_KEY: shared secret required for /mcp aggregator + /{service}/mcp proxy.
-  // Set via `wrangler secret put MCP_API_KEY`.
-  MCP_API_KEY?: string;
 }
 
 type BindingKey = keyof Env;
@@ -51,38 +48,6 @@ function corsHeaders(): Record<string, string> {
     "Access-Control-Allow-Headers": "Content-Type, Accept, Authorization, mcp-session-id, mcp-protocol-version",
     "Access-Control-Expose-Headers": "mcp-session-id",
   };
-}
-
-/**
- * Fail-closed Bearer token check for MCP surface routes.
- * Returns null on success, or a 401 Response on failure.
- */
-function requireBearerToken(request: Request, env: Env): Response | null {
-  const expected = env.MCP_API_KEY;
-  if (!expected) {
-    // Misconfiguration: refuse to serve until the secret is provisioned.
-    return new Response(
-      JSON.stringify({
-        jsonrpc: "2.0",
-        id: null,
-        error: { code: -32001, message: "MCP_API_KEY not configured on aggregator" },
-      }),
-      { status: 503, headers: { "Content-Type": "application/json", ...corsHeaders() } },
-    );
-  }
-  const auth = request.headers.get("Authorization") || "";
-  const m = auth.match(/^Bearer\s+(.+)$/i);
-  if (!m || m[1] !== expected) {
-    return new Response(
-      JSON.stringify({
-        jsonrpc: "2.0",
-        id: null,
-        error: { code: -32001, message: "unauthorized" },
-      }),
-      { status: 401, headers: { "Content-Type": "application/json", ...corsHeaders() } },
-    );
-  }
-  return null;
 }
 
 function sseResponse(data: unknown, headers?: Record<string, string>): Response {
@@ -246,11 +211,11 @@ export default {
       });
     }
 
-    // Per-service proxy: /dispute/mcp → SVC_DISPUTE /mcp (auth-gated)
+    // Per-service proxy: /dispute/mcp → SVC_DISPUTE /mcp
+    // Auth is enforced by Cloudflare Access at the perimeter (mcp.chitty.cc).
+    // Service bindings are internal — no public ingress to upstream workers.
     for (const [prefix, svc] of Object.entries(SERVICE_MAP)) {
       if (path === `/${prefix}/mcp` || path.startsWith(`/${prefix}/mcp/`)) {
-        const authErr = requireBearerToken(request, env);
-        if (authErr) return authErr;
         const service = env[svc.binding] as Fetcher;
         const newUrl = new URL(request.url);
         newUrl.pathname = path.slice(`/${prefix}`.length) || "/";
@@ -258,11 +223,9 @@ export default {
       }
     }
 
-    // Aggregated MCP at /mcp (auth-gated)
+    // Aggregated MCP at /mcp
+    // Auth is enforced by Cloudflare Access at the perimeter (mcp.chitty.cc).
     if ((path === "/mcp" || path.startsWith("/mcp/")) && request.method === "POST") {
-      const authErr = requireBearerToken(request, env);
-      if (authErr) return authErr;
-
       let body: any;
       try {
         body = await request.clone().json();
