@@ -146,6 +146,7 @@ async function forwardToolCall(
   toolName: string,
   args: Record<string, unknown>,
   requestId: unknown,
+  request: Request,
 ): Promise<Response> {
   const initResp = await service.fetch(
     new Request("https://internal/mcp", {
@@ -169,11 +170,15 @@ async function forwardToolCall(
 
   const sessionId = initResp.headers.get("mcp-session-id");
   if (!sessionId) {
-    return sseResponse({
-      jsonrpc: "2.0",
-      id: requestId,
-      error: { code: -32000, message: "Failed to establish backend session" },
-    });
+    return sseResponse(
+      {
+        jsonrpc: "2.0",
+        id: requestId,
+        error: { code: -32000, message: "Failed to establish backend session" },
+      },
+      undefined,
+      request,
+    );
   }
 
   return service.fetch(
@@ -244,11 +249,15 @@ export default {
       try {
         body = await request.clone().json();
       } catch {
-        return sseResponse({
-          jsonrpc: "2.0",
-          id: null,
-          error: { code: -32700, message: "Parse error: request body is not valid JSON" },
-        });
+        return sseResponse(
+          {
+            jsonrpc: "2.0",
+            id: null,
+            error: { code: -32700, message: "Parse error: request body is not valid JSON" },
+          },
+          undefined,
+          request,
+        );
       }
 
       if (body.method === "initialize") {
@@ -263,6 +272,7 @@ export default {
             },
           },
           { "mcp-session-id": crypto.randomUUID() },
+          request,
         );
       }
 
@@ -273,33 +283,45 @@ export default {
             return discoverTools(service, id);
           }),
         );
-        return sseResponse({
-          jsonrpc: "2.0",
-          id: body.id,
-          result: { tools: results.flat() },
-        });
+        return sseResponse(
+          {
+            jsonrpc: "2.0",
+            id: body.id,
+            result: { tools: results.flat() },
+          },
+          undefined,
+          request,
+        );
       }
 
       if (body.method === "tools/call") {
         const fullName: string = body.params?.name || "";
         const slash = fullName.indexOf("/");
         if (slash === -1) {
-          return sseResponse({
-            jsonrpc: "2.0",
-            id: body.id,
-            error: { code: -32602, message: "Tool must be namespaced: service/tool" },
-          });
+          return sseResponse(
+            {
+              jsonrpc: "2.0",
+              id: body.id,
+              error: { code: -32602, message: "Tool must be namespaced: service/tool" },
+            },
+            undefined,
+            request,
+          );
         }
 
         const serviceId = fullName.slice(0, slash);
         const toolName = fullName.slice(slash + 1);
         const svc = SERVICE_MAP[serviceId];
         if (!svc) {
-          return sseResponse({
-            jsonrpc: "2.0",
-            id: body.id,
-            error: { code: -32602, message: `Unknown service: ${serviceId}. Available: ${Object.keys(SERVICE_MAP).join(", ")}` },
-          });
+          return sseResponse(
+            {
+              jsonrpc: "2.0",
+              id: body.id,
+              error: { code: -32602, message: `Unknown service: ${serviceId}. Available: ${Object.keys(SERVICE_MAP).join(", ")}` },
+            },
+            undefined,
+            request,
+          );
         }
 
         return forwardToolCall(
@@ -307,14 +329,19 @@ export default {
           toolName,
           body.params?.arguments || {},
           body.id,
+          request,
         );
       }
 
-      return sseResponse({
-        jsonrpc: "2.0",
-        id: body.id,
-        error: { code: -32601, message: `Method not found: ${body.method}` },
-      });
+      return sseResponse(
+        {
+          jsonrpc: "2.0",
+          id: body.id,
+          error: { code: -32601, message: `Method not found: ${body.method}` },
+        },
+        undefined,
+        request,
+      );
     }
 
     return new Response("Not Found", { status: 404 });
