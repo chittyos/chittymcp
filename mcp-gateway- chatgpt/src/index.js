@@ -31,6 +31,17 @@ app.use('/*', cors({
 // Logging middleware
 app.use('/*', logger());
 
+// Deprecation headers — this gateway is being retired in favor of the canonical
+// mcp.chitty.cc aggregator. ChatGPT MCP clients should re-register against
+// https://mcp.chitty.cc/ (same OAuth flow, same scopes, same tools, unified
+// audit). Sunset window: 2026-08-15.
+app.use('/*', async (c, next) => {
+  c.header('Deprecation', 'true');
+  c.header('Sunset', 'Sat, 15 Aug 2026 00:00:00 GMT');
+  c.header('Link', '<https://mcp.chitty.cc/mcp>; rel="successor-version", <https://mcp.chitty.cc/sse>; rel="alternate"');
+  await next();
+});
+
 /**
  * Health check endpoint
  * GET /health
