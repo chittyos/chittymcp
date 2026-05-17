@@ -105,33 +105,88 @@ async function loadActiveServices(env: Env): Promise<Record<string, ServiceEntry
   }
 }
 
-async function fetchPostureRegistry(env: Env): Promise<DynamicServiceEntry[] | null> {
+type PostureFetchResult =
+  | { status: "ok"; services: DynamicServiceEntry[] }
+  | { status: "not_configured" }
+  | { status: "fetch_failed"; error: string };
+
+async function fetchPostureRegistry(env: Env): Promise<PostureFetchResult> {
   const url = env.CHITTYREGISTER_POSTURE_URL;
-  if (!url) return null;
+  if (!url) return { status: "not_configured" };
+  const headers: Record<string, string> = { "content-type": "application/json" };
+  if (env.CHITTYAUTH_ISSUED_REGISTER_TOKEN) {
+    headers.authorization = `Bearer ${env.CHITTYAUTH_ISSUED_REGISTER_TOKEN}`;
+  }
+  let res: Response;
   try {
-    const headers: Record<string, string> = { "content-type": "application/json" };
-    if (env.CHITTYAUTH_ISSUED_REGISTER_TOKEN) {
-      headers.authorization = `Bearer ${env.CHITTYAUTH_ISSUED_REGISTER_TOKEN}`;
-    }
-    const res = await fetch(url, { method: "GET", headers });
-    if (!res.ok) return null;
-    const payload = await res.json() as { services?: DynamicServiceEntry[] };
-    return Array.isArray(payload.services) ? payload.services : null;
-  } catch {
-    return null;
+    res = await fetch(url, { method: "GET", headers });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`[posture] fetch threw url=${url} err=${msg}`);
+    return { status: "fetch_failed", error: `network: ${msg}` };
+  }
+  if (!res.ok) {
+    console.error(`[posture] fetch non-2xx url=${url} status=${res.status}`);
+    return { status: "fetch_failed", error: `http ${res.status}` };
+  }
+  let payload: { services?: DynamicServiceEntry[] };
+  try {
+    payload = await res.json() as { services?: DynamicServiceEntry[] };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`[posture] non-JSON body url=${url} err=${msg}`);
+    return { status: "fetch_failed", error: `parse: ${msg}` };
+  }
+  if (!Array.isArray(payload.services)) {
+    return { status: "fetch_failed", error: "payload.services not an array" };
+  }
+  return { status: "ok", services: payload.services };
+}
+
+type SyncResult =
+  | { status: "synced"; count: number }
+  | { status: "no_kv" }
+  | { status: "fetch_failed"; error: string }
+  | { status: "empty" }
+  | { status: "kv_write_failed"; count: number; error: string };
+
+async function syncRegistryFromPosture(env: Env): Promise<SyncResult> {
+  if (!env.MCP_REGISTRY) return { status: "no_kv" };
+  const result = await fetchPostureRegistry(env);
+  if (result.status !== "ok") {
+    return result.status === "not_configured"
+      ? { status: "fetch_failed", error: "CHITTYREGISTER_POSTURE_URL not set" }
+      : { status: "fetch_failed", error: result.error };
+  }
+  if (result.services.length === 0) return { status: "empty" };
+  try {
+    await env.MCP_REGISTRY.put(MCP_REGISTRY_KEY, JSON.stringify(result.services));
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`[posture] KV write failed err=${msg}`);
+    return { status: "kv_write_failed", count: result.services.length, error: msg };
+  }
+  return { status: "synced", count: result.services.length };
+}
+
+class CfApiError extends Error {
+  status: number;
+  method: string;
+  path: string;
+  constructor(message: string, status: number, method: string, path: string) {
+    super(message);
+    this.name = "CfApiError";
+    this.status = status;
+    this.method = method;
+    this.path = path;
   }
 }
 
-async function syncRegistryFromPosture(env: Env): Promise<{ synced: boolean; count: number }> {
-  if (!env.MCP_REGISTRY) return { synced: false, count: 0 };
-  const services = await fetchPostureRegistry(env);
-  if (!services || services.length === 0) return { synced: false, count: 0 };
-  await env.MCP_REGISTRY.put(MCP_REGISTRY_KEY, JSON.stringify(services));
-  return { synced: true, count: services.length };
-}
-
 async function cfApi<T = unknown>(env: Env, path: string, init?: RequestInit): Promise<T> {
-  if (!env.CLOUDFLARE_API_TOKEN) throw new Error("CLOUDFLARE_API_TOKEN is not configured");
+  const method = (init?.method || "GET").toUpperCase();
+  if (!env.CLOUDFLARE_API_TOKEN) {
+    throw new CfApiError("CLOUDFLARE_API_TOKEN is not configured", 0, method, path);
+  }
   const res = await fetch(`https://api.cloudflare.com/client/v4${path}`, {
     ...init,
     headers: {
@@ -140,14 +195,30 @@ async function cfApi<T = unknown>(env: Env, path: string, init?: RequestInit): P
       ...(init?.headers || {}),
     },
   });
-  const payload = await res.json() as { success: boolean; result: T; errors?: Array<{ message: string }> };
-  if (!res.ok || !payload.success) {
-    throw new Error(payload.errors?.map((e) => e.message).join("; ") || `Cloudflare API failed: ${res.status}`);
+  let payload: { success: boolean; result: T; errors?: Array<{ message: string }> } | null = null;
+  try {
+    payload = await res.json() as typeof payload;
+  } catch {
+    // Non-JSON body (CF edge HTML during incidents, gateway errors, etc.)
+    throw new CfApiError(`Cloudflare returned non-JSON body (HTTP ${res.status})`, res.status, method, path);
+  }
+  if (!res.ok || !payload || !payload.success) {
+    const msg = payload?.errors?.map((e) => e.message).join("; ") || `HTTP ${res.status}`;
+    throw new CfApiError(msg, res.status, method, path);
   }
   return payload.result;
 }
 
-async function reconcileRoutes(env: Env, serviceMap: Record<string, ServiceEntry>) {
+interface ReconcileResult {
+  ok: boolean;
+  script: string;
+  desiredCount: number;
+  created: string[];
+  deleted: string[];
+  failed: Array<{ op: "create" | "delete"; pattern: string; error: string }>;
+}
+
+async function reconcileRoutes(env: Env, serviceMap: Record<string, ServiceEntry>): Promise<ReconcileResult> {
   const zoneId = env.CLOUDFLARE_ZONE_ID;
   const accountId = env.CLOUDFLARE_ACCOUNT_ID;
   if (!zoneId || !accountId) {
@@ -171,29 +242,44 @@ async function reconcileRoutes(env: Env, serviceMap: Record<string, ServiceEntry
 
   const created: string[] = [];
   const deleted: string[] = [];
+  const failed: ReconcileResult["failed"] = [];
 
+  // Per-iteration try/catch so one failed route doesn't leave the zone half-reconciled
+  // without an audit trail. Continue past failures and return a complete envelope.
   for (const pattern of desiredPatterns) {
-    if (!existingPatterns.has(pattern)) {
+    if (existingPatterns.has(pattern)) continue;
+    try {
       await cfApi(env, `/zones/${zoneId}/workers/routes`, {
         method: "POST",
         body: JSON.stringify({ pattern, script }),
       });
       created.push(pattern);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`[reconcile] create failed pattern=${pattern} err=${msg}`);
+      failed.push({ op: "create", pattern, error: msg });
     }
   }
 
   for (const route of existingForScript) {
-    if (!desiredPatterns.has(route.pattern)) {
+    if (desiredPatterns.has(route.pattern)) continue;
+    try {
       await cfApi(env, `/zones/${zoneId}/workers/routes/${route.id}`, { method: "DELETE" });
       deleted.push(route.pattern);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`[reconcile] delete failed pattern=${route.pattern} err=${msg}`);
+      failed.push({ op: "delete", pattern: route.pattern, error: msg });
     }
   }
 
   return {
+    ok: failed.length === 0,
     script,
     desiredCount: desiredPatterns.size,
     created,
     deleted,
+    failed,
   };
 }
 
@@ -372,13 +458,13 @@ export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
     const path = url.pathname;
-    const serviceMap = await loadActiveServices(env);
 
+    // Cheap branches first — these don't need the dynamic service map and
+    // shouldn't pay a KV read per request.
     if (request.method === "OPTIONS") {
       return new Response(null, { headers: corsHeaders() });
     }
 
-    // Health
     if (request.method === "GET" && path === "/health") {
       return Response.json({
         status: "ok",
@@ -387,6 +473,9 @@ export default {
         services: Object.keys(SERVICE_MAP),
       });
     }
+
+    // Everything below depends on the active (posture-filtered) service map.
+    const serviceMap = await loadActiveServices(env);
 
     // Service index
     if (request.method === "GET" && (path === "/" || path === "")) {
@@ -400,7 +489,10 @@ export default {
       });
     }
 
+    // Admin-gated: leaks internal binding topology. Behind CHITTYAUTH_ISSUED_MCP_ADMIN_TOKEN.
     if (request.method === "GET" && path === "/registry/services") {
+      const deny = requireAdmin(request, env);
+      if (deny) return deny;
       return Response.json({
         service: "chittymcp",
         source: env.MCP_REGISTRY ? "dynamic-or-fallback" : "static",
@@ -414,14 +506,17 @@ export default {
       const deny = requireAdmin(request, env);
       if (deny) return deny;
       const result = await syncRegistryFromPosture(env);
-      return Response.json({ ok: true, ...result });
+      const ok = result.status === "synced";
+      const status = ok ? 200 : 502;
+      return Response.json({ ok, ...result }, { status });
     }
 
     if (request.method === "POST" && path === "/admin/reconcile/routes") {
       const deny = requireAdmin(request, env);
       if (deny) return deny;
       const result = await reconcileRoutes(env, serviceMap);
-      return Response.json({ ok: true, ...result });
+      // 207-style partial success → 502 if any route failed, 200 if clean.
+      return Response.json(result, { status: result.ok ? 200 : 502 });
     }
 
     // Per-service proxy: /dispute/mcp → SVC_DISPUTE /mcp (auth-gated, dynamic serviceMap)
