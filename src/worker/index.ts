@@ -41,19 +41,33 @@ const SERVICE_MAP: Record<string, ServiceEntry> = {
   ch1tty:   { binding: "SVC_CH1TTY",   label: "Ch1tty Gateway" },
 };
 
-function corsHeaders(): Record<string, string> {
+// Explicit allowlist for known MCP client origins. Browser-based MCP clients
+// (ChatGPT, Claude.ai, MCP Inspector) must be enumerated; non-browser clients
+// (Claude Code, mcp-cli, etc.) don't enforce CORS and aren't affected.
+const ALLOWED_ORIGINS = new Set<string>([
+  "https://chatgpt.com",
+  "https://chat.openai.com",
+  "https://claude.ai",
+  "https://www.claude.ai",
+  "https://inspector.modelcontextprotocol.io",
+]);
+
+function corsHeaders(request?: Request): Record<string, string> {
+  const origin = request?.headers.get("Origin") || "";
+  const allowOrigin = ALLOWED_ORIGINS.has(origin) ? origin : "null";
   return {
-    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Origin": allowOrigin,
     "Access-Control-Allow-Methods": "POST, GET, OPTIONS, DELETE",
     "Access-Control-Allow-Headers": "Content-Type, Accept, Authorization, mcp-session-id, mcp-protocol-version",
     "Access-Control-Expose-Headers": "mcp-session-id",
+    "Vary": "Origin",
   };
 }
 
-function sseResponse(data: unknown, headers?: Record<string, string>): Response {
+function sseResponse(data: unknown, headers?: Record<string, string>, request?: Request): Response {
   return new Response(
     `event: message\ndata: ${JSON.stringify(data)}\n\n`,
-    { headers: { "Content-Type": "text/event-stream", ...corsHeaders(), ...headers } },
+    { headers: { "Content-Type": "text/event-stream", ...corsHeaders(request), ...headers } },
   );
 }
 
@@ -186,7 +200,7 @@ export default {
     const path = url.pathname;
 
     if (request.method === "OPTIONS") {
-      return new Response(null, { headers: corsHeaders() });
+      return new Response(null, { headers: corsHeaders(request) });
     }
 
     // Health
