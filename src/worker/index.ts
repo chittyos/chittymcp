@@ -20,9 +20,6 @@ interface Env {
   SVC_REGISTRY: Fetcher;
   SVC_CONNECT: Fetcher;
   SVC_CH1TTY: Fetcher;
-  // MCP_API_KEY: shared secret required for /mcp aggregator + /{service}/mcp proxy.
-  // Set via `wrangler secret put MCP_API_KEY`.
-  MCP_API_KEY?: string;
 }
 
 type BindingKey = keyof Env;
@@ -44,51 +41,33 @@ const SERVICE_MAP: Record<string, ServiceEntry> = {
   ch1tty:   { binding: "SVC_CH1TTY",   label: "Ch1tty Gateway" },
 };
 
-function corsHeaders(): Record<string, string> {
+// Explicit allowlist for known MCP client origins. Browser-based MCP clients
+// (ChatGPT, Claude.ai, MCP Inspector) must be enumerated; non-browser clients
+// (Claude Code, mcp-cli, etc.) don't enforce CORS and aren't affected.
+const ALLOWED_ORIGINS = new Set<string>([
+  "https://chatgpt.com",
+  "https://chat.openai.com",
+  "https://claude.ai",
+  "https://www.claude.ai",
+  "https://inspector.modelcontextprotocol.io",
+]);
+
+function corsHeaders(request?: Request): Record<string, string> {
+  const origin = request?.headers.get("Origin") || "";
+  const allowOrigin = ALLOWED_ORIGINS.has(origin) ? origin : "null";
   return {
-    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Origin": allowOrigin,
     "Access-Control-Allow-Methods": "POST, GET, OPTIONS, DELETE",
     "Access-Control-Allow-Headers": "Content-Type, Accept, Authorization, mcp-session-id, mcp-protocol-version",
     "Access-Control-Expose-Headers": "mcp-session-id",
+    "Vary": "Origin",
   };
 }
 
-/**
- * Fail-closed Bearer token check for MCP surface routes.
- * Returns null on success, or a 401 Response on failure.
- */
-function requireBearerToken(request: Request, env: Env): Response | null {
-  const expected = env.MCP_API_KEY;
-  if (!expected) {
-    // Misconfiguration: refuse to serve until the secret is provisioned.
-    return new Response(
-      JSON.stringify({
-        jsonrpc: "2.0",
-        id: null,
-        error: { code: -32001, message: "MCP_API_KEY not configured on aggregator" },
-      }),
-      { status: 503, headers: { "Content-Type": "application/json", ...corsHeaders() } },
-    );
-  }
-  const auth = request.headers.get("Authorization") || "";
-  const m = auth.match(/^Bearer\s+(.+)$/i);
-  if (!m || m[1] !== expected) {
-    return new Response(
-      JSON.stringify({
-        jsonrpc: "2.0",
-        id: null,
-        error: { code: -32001, message: "unauthorized" },
-      }),
-      { status: 401, headers: { "Content-Type": "application/json", ...corsHeaders() } },
-    );
-  }
-  return null;
-}
-
-function sseResponse(data: unknown, headers?: Record<string, string>): Response {
+function sseResponse(data: unknown, headers?: Record<string, string>, request?: Request): Response {
   return new Response(
     `event: message\ndata: ${JSON.stringify(data)}\n\n`,
-    { headers: { "Content-Type": "text/event-stream", ...corsHeaders(), ...headers } },
+    { headers: { "Content-Type": "text/event-stream", ...corsHeaders(request), ...headers } },
   );
 }
 
@@ -167,6 +146,7 @@ async function forwardToolCall(
   toolName: string,
   args: Record<string, unknown>,
   requestId: unknown,
+  request: Request,
 ): Promise<Response> {
   const initResp = await service.fetch(
     new Request("https://internal/mcp", {
@@ -190,11 +170,15 @@ async function forwardToolCall(
 
   const sessionId = initResp.headers.get("mcp-session-id");
   if (!sessionId) {
-    return sseResponse({
-      jsonrpc: "2.0",
-      id: requestId,
-      error: { code: -32000, message: "Failed to establish backend session" },
-    });
+    return sseResponse(
+      {
+        jsonrpc: "2.0",
+        id: requestId,
+        error: { code: -32000, message: "Failed to establish backend session" },
+      },
+      undefined,
+      request,
+    );
   }
 
   return service.fetch(
@@ -221,7 +205,7 @@ export default {
     const path = url.pathname;
 
     if (request.method === "OPTIONS") {
-      return new Response(null, { headers: corsHeaders() });
+      return new Response(null, { headers: corsHeaders(request) });
     }
 
     // Health
@@ -246,11 +230,11 @@ export default {
       });
     }
 
-    // Per-service proxy: /dispute/mcp → SVC_DISPUTE /mcp (auth-gated)
+    // Per-service proxy: /dispute/mcp → SVC_DISPUTE /mcp
+    // Auth is enforced by Cloudflare Access at the perimeter (mcp.chitty.cc).
+    // Service bindings are internal — no public ingress to upstream workers.
     for (const [prefix, svc] of Object.entries(SERVICE_MAP)) {
       if (path === `/${prefix}/mcp` || path.startsWith(`/${prefix}/mcp/`)) {
-        const authErr = requireBearerToken(request, env);
-        if (authErr) return authErr;
         const service = env[svc.binding] as Fetcher;
         const newUrl = new URL(request.url);
         newUrl.pathname = path.slice(`/${prefix}`.length) || "/";
@@ -258,20 +242,22 @@ export default {
       }
     }
 
-    // Aggregated MCP at /mcp (auth-gated)
+    // Aggregated MCP at /mcp
+    // Auth is enforced by Cloudflare Access at the perimeter (mcp.chitty.cc).
     if ((path === "/mcp" || path.startsWith("/mcp/")) && request.method === "POST") {
-      const authErr = requireBearerToken(request, env);
-      if (authErr) return authErr;
-
       let body: any;
       try {
         body = await request.clone().json();
       } catch {
-        return sseResponse({
-          jsonrpc: "2.0",
-          id: null,
-          error: { code: -32700, message: "Parse error: request body is not valid JSON" },
-        });
+        return sseResponse(
+          {
+            jsonrpc: "2.0",
+            id: null,
+            error: { code: -32700, message: "Parse error: request body is not valid JSON" },
+          },
+          undefined,
+          request,
+        );
       }
 
       if (body.method === "initialize") {
@@ -286,6 +272,7 @@ export default {
             },
           },
           { "mcp-session-id": crypto.randomUUID() },
+          request,
         );
       }
 
@@ -296,33 +283,45 @@ export default {
             return discoverTools(service, id);
           }),
         );
-        return sseResponse({
-          jsonrpc: "2.0",
-          id: body.id,
-          result: { tools: results.flat() },
-        });
+        return sseResponse(
+          {
+            jsonrpc: "2.0",
+            id: body.id,
+            result: { tools: results.flat() },
+          },
+          undefined,
+          request,
+        );
       }
 
       if (body.method === "tools/call") {
         const fullName: string = body.params?.name || "";
         const slash = fullName.indexOf("/");
         if (slash === -1) {
-          return sseResponse({
-            jsonrpc: "2.0",
-            id: body.id,
-            error: { code: -32602, message: "Tool must be namespaced: service/tool" },
-          });
+          return sseResponse(
+            {
+              jsonrpc: "2.0",
+              id: body.id,
+              error: { code: -32602, message: "Tool must be namespaced: service/tool" },
+            },
+            undefined,
+            request,
+          );
         }
 
         const serviceId = fullName.slice(0, slash);
         const toolName = fullName.slice(slash + 1);
         const svc = SERVICE_MAP[serviceId];
         if (!svc) {
-          return sseResponse({
-            jsonrpc: "2.0",
-            id: body.id,
-            error: { code: -32602, message: `Unknown service: ${serviceId}. Available: ${Object.keys(SERVICE_MAP).join(", ")}` },
-          });
+          return sseResponse(
+            {
+              jsonrpc: "2.0",
+              id: body.id,
+              error: { code: -32602, message: `Unknown service: ${serviceId}. Available: ${Object.keys(SERVICE_MAP).join(", ")}` },
+            },
+            undefined,
+            request,
+          );
         }
 
         return forwardToolCall(
@@ -330,14 +329,19 @@ export default {
           toolName,
           body.params?.arguments || {},
           body.id,
+          request,
         );
       }
 
-      return sseResponse({
-        jsonrpc: "2.0",
-        id: body.id,
-        error: { code: -32601, message: `Method not found: ${body.method}` },
-      });
+      return sseResponse(
+        {
+          jsonrpc: "2.0",
+          id: body.id,
+          error: { code: -32601, message: `Method not found: ${body.method}` },
+        },
+        undefined,
+        request,
+      );
     }
 
     return new Response("Not Found", { status: 404 });
