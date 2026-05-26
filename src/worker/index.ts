@@ -25,6 +25,7 @@ interface Env {
   SVC_CLEANER: Fetcher;
   SVC_DISPATCH: Fetcher;
   SVC_DISPUTE: Fetcher;
+  SVC_EVIDENCE: Fetcher;
   SVC_GAM: Fetcher;
   SVC_HELPER: Fetcher;
   SVC_IMESSAGE: Fetcher;
@@ -66,6 +67,7 @@ const SERVICE_MAP: Record<string, ServiceEntry> = {
   cleaner:      { binding: "SVC_CLEANER",      label: "Cleaner",            description: "Cleaning ops + scheduling",            tags: { surface: "all", domain: "ops",            audience: "machine", auth: "service-binding", tier: 4 } },
   dispatch:     { binding: "SVC_DISPATCH",     label: "Dispatch",           description: "Task dispatch + queueing",             tags: { surface: "all", domain: "ops",            audience: "machine", auth: "service-binding", tier: 3 } },
   dispute:      { binding: "SVC_DISPUTE",     label: "Dispute",             description: "Dispute intake + comms intelligence",  tags: { surface: "all", domain: "legal",          audience: "both",    auth: "token",           tier: 4 } },
+  evidence:     { binding: "SVC_EVIDENCE",    label: "Evidence",            description: "Evidence pipeline orchestration",      tags: { surface: "all", domain: "legal",          audience: "machine", auth: "service-binding", tier: 4 } },
   gam:          { binding: "SVC_GAM",          label: "GAM",                description: "Google Workspace admin",               tags: { surface: "all", domain: "ops",            audience: "machine", auth: "service-binding", tier: 3 } },
   helper:       { binding: "SVC_HELPER",       label: "Helper",             description: "Ecosystem navigation + Q&A",           tags: { surface: "all", domain: "meta",           audience: "both",    auth: "token",           tier: 3 } },
   imessage:     { binding: "SVC_IMESSAGE",     label: "iMessage",           description: "iMessage thread access",               tags: { surface: "all", domain: "messaging",      audience: "human",   auth: "oauth-ok",        tier: 4 } },

@@ -31,6 +31,7 @@
     { "binding": "SVC_CLEANER",      "service": "chittyagent-cleaner" },
     { "binding": "SVC_DISPATCH",     "service": "chittyagent-dispatch" },
     { "binding": "SVC_DISPUTE",      "service": "chittyagent-dispute" },
+    { "binding": "SVC_EVIDENCE",     "service": "chittyagent-evidence" },
     { "binding": "SVC_GAM",          "service": "chittyagent-gam" },
     { "binding": "SVC_HELPER",       "service": "chittyagent-helper" },
     { "binding": "SVC_IMESSAGE",     "service": "chittyagent-imessage" },
