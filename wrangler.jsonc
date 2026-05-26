@@ -12,20 +12,37 @@
     { "pattern": "mcp.chitty.cc/*", "zone_name": "chitty.cc" }
   ],
 
-  // Service bindings — each MCP-capable service in the ecosystem.
-  // ChittyMCP proxies to these via service bindings (no HTTP round-trips).
-  // Namespace at mcp.chitty.cc is the clean service name:
-  //   mcp.chitty.cc/dispute/mcp → chittyagent-dispute
-  //   mcp.chitty.cc/notes/mcp   → chittyagent-notes
+  // Service bindings — every chittyagent-* worker confirmed live at
+  // <name>.agent.chitty.cc/mcp (HTTP 302 = Cloudflare Access challenge = route exists).
+  // Aggregated namespace at mcp.chitty.cc:
+  //   mcp.chitty.cc/mcp              → tools/list, tools/call (all services, namespaced)
+  //   mcp.chitty.cc/<name>/mcp       → proxied directly to chittyagent-<name>
+  //   mcp.chitty.cc/v0.1/servers     → MCP-spec discovery
+  //
+  // Source of truth for membership: docs/agent-registry-triage.json (Bucket A).
+  // Services not yet deployed (Bucket C) are intentionally NOT bound — re-add when live.
   "services": [
-    { "binding": "SVC_DISPUTE", "service": "chittyagent-dispute" },
-    { "binding": "SVC_NOTES", "service": "chittyagent-notes" },
-    { "binding": "SVC_SHIP", "service": "chittyagent-ship" },
-    { "binding": "SVC_STORAGE", "service": "chittystorage" },
-    { "binding": "SVC_ROUTER", "service": "chittyrouter" },
-    { "binding": "SVC_COMMAND", "service": "chittycommand" },
-    { "binding": "SVC_REGISTRY", "service": "chittyregistry" },
-    { "binding": "SVC_CONNECT", "service": "chittyconnect" },
-    { "binding": "SVC_CH1TTY", "service": "chittyagent-ch1tty" }
+    { "binding": "SVC_ALCHEMIST",    "service": "chittyagent-alchemist" },
+    { "binding": "SVC_AUTH",         "service": "chittyagent-auth" },
+    { "binding": "SVC_AUTOASSIST",   "service": "chittyagent-autoassist" },
+    { "binding": "SVC_CANON",        "service": "chittyagent-canon" },
+    { "binding": "SVC_CH1TTY",       "service": "chittyagent-ch1tty" },
+    { "binding": "SVC_CHATGPT",      "service": "chittyagent-chatgpt" },
+    { "binding": "SVC_CLEANER",      "service": "chittyagent-cleaner" },
+    { "binding": "SVC_DISPATCH",     "service": "chittyagent-dispatch" },
+    { "binding": "SVC_DISPUTE",      "service": "chittyagent-dispute" },
+    { "binding": "SVC_GAM",          "service": "chittyagent-gam" },
+    { "binding": "SVC_HELPER",       "service": "chittyagent-helper" },
+    { "binding": "SVC_IMESSAGE",     "service": "chittyagent-imessage" },
+    { "binding": "SVC_MARKET",       "service": "chittyagent-market" },
+    { "binding": "SVC_NEON",         "service": "chittyagent-neon" },
+    { "binding": "SVC_NOTES",        "service": "chittyagent-notes" },
+    { "binding": "SVC_NOTION",       "service": "chittyagent-notion" },
+    { "binding": "SVC_ORCHESTRATOR", "service": "chittyagent-orchestrator" },
+    { "binding": "SVC_QUO",          "service": "chittyagent-quo" },
+    { "binding": "SVC_RESOLVE",      "service": "chittyagent-resolve" },
+    { "binding": "SVC_SCRAPE",       "service": "chittyagent-scrape" },
+    { "binding": "SVC_SHIP",         "service": "chittyagent-ship" },
+    { "binding": "SVC_STORAGE",      "service": "chittyagent-storage" }
   ]
 }

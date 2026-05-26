@@ -1,27 +1,43 @@
 /**
  * ChittyMCP — MCP Aggregator Worker
  *
- * Serves mcp.chitty.cc — collects all ChittyOS service MCP endpoints
- * into one surface via service bindings (no HTTP round-trips).
+ * Serves mcp.chitty.cc — federates every chittyagent-* MCP under a single
+ * surface via Cloudflare Service Bindings (no HTTP round-trips).
  *
- *   mcp.chitty.cc/mcp           → aggregated (all tools, namespaced)
- *   mcp.chitty.cc/dispute/mcp   → proxied to chittyagent-dispute
- *   mcp.chitty.cc/notes/mcp     → proxied to chittyagent-notes
- *   etc.
+ *   mcp.chitty.cc/mcp              → aggregated tools/list + tools/call (namespaced)
+ *   mcp.chitty.cc/<name>/mcp       → proxied directly to chittyagent-<name>
+ *   mcp.chitty.cc/v0.1/servers     → official MCP-spec discovery endpoint
+ *   mcp.chitty.cc/health           → liveness
+ *
+ * Membership source of truth: docs/agent-registry-triage.json (Bucket A).
+ * Per-aggregator policy filter (chittymsg = domain:messaging, ch1tty =
+ * audience:human+auth:oauth-ok) is encoded in the SERVICE_MAP tags below;
+ * downstream aggregators read /v0.1/servers and filter client-side.
  */
 
 interface Env {
+  SVC_ALCHEMIST: Fetcher;
+  SVC_AUTH: Fetcher;
+  SVC_AUTOASSIST: Fetcher;
+  SVC_CANON: Fetcher;
+  SVC_CH1TTY: Fetcher;
+  SVC_CHATGPT: Fetcher;
+  SVC_CLEANER: Fetcher;
+  SVC_DISPATCH: Fetcher;
   SVC_DISPUTE: Fetcher;
+  SVC_GAM: Fetcher;
+  SVC_HELPER: Fetcher;
+  SVC_IMESSAGE: Fetcher;
+  SVC_MARKET: Fetcher;
+  SVC_NEON: Fetcher;
   SVC_NOTES: Fetcher;
+  SVC_NOTION: Fetcher;
+  SVC_ORCHESTRATOR: Fetcher;
+  SVC_QUO: Fetcher;
+  SVC_RESOLVE: Fetcher;
+  SVC_SCRAPE: Fetcher;
   SVC_SHIP: Fetcher;
   SVC_STORAGE: Fetcher;
-  SVC_ROUTER: Fetcher;
-  SVC_COMMAND: Fetcher;
-  SVC_REGISTRY: Fetcher;
-  SVC_CONNECT: Fetcher;
-  SVC_CH1TTY: Fetcher;
-  // MCP_API_KEY: shared secret required for /mcp aggregator + /{service}/mcp proxy.
-  // Set via `wrangler secret put MCP_API_KEY`.
   MCP_API_KEY?: string;
 }
 
@@ -30,18 +46,39 @@ type BindingKey = keyof Env;
 interface ServiceEntry {
   binding: BindingKey;
   label: string;
+  description: string;
+  tags: {
+    surface: "all";
+    domain: string;
+    audience: "machine" | "human" | "both";
+    auth: "service-binding" | "token" | "oauth-ok";
+    tier: 0 | 1 | 2 | 3 | 4 | 5;
+  };
 }
 
 const SERVICE_MAP: Record<string, ServiceEntry> = {
-  dispute:  { binding: "SVC_DISPUTE",  label: "Dispute Management" },
-  notes:    { binding: "SVC_NOTES",    label: "Notes & Knowledge" },
-  ship:     { binding: "SVC_SHIP",     label: "Ship & Deploy" },
-  storage:  { binding: "SVC_STORAGE",  label: "Document Storage" },
-  router:   { binding: "SVC_ROUTER",   label: "Routing & Delivery" },
-  command:  { binding: "SVC_COMMAND",  label: "Command & Control" },
-  registry: { binding: "SVC_REGISTRY", label: "Service Registry" },
-  connect:  { binding: "SVC_CONNECT",  label: "ChittyConnect Spine" },
-  ch1tty:   { binding: "SVC_CH1TTY",   label: "Ch1tty Gateway" },
+  alchemist:    { binding: "SVC_ALCHEMIST",    label: "Alchemist",          description: "Telemetry ingest + entity graph",      tags: { surface: "all", domain: "observability",  audience: "machine", auth: "service-binding", tier: 3 } },
+  auth:         { binding: "SVC_AUTH",         label: "Auth",               description: "ChittyAuth identity + tokens",         tags: { surface: "all", domain: "identity",       audience: "machine", auth: "service-binding", tier: 1 } },
+  autoassist:   { binding: "SVC_AUTOASSIST",   label: "AutoAssist",         description: "Automated tenant / lead assist",       tags: { surface: "all", domain: "comms",          audience: "machine", auth: "service-binding", tier: 4 } },
+  canon:        { binding: "SVC_CANON",        label: "Canon",              description: "Canonical pattern + governance",       tags: { surface: "all", domain: "governance",     audience: "machine", auth: "service-binding", tier: 1 } },
+  ch1tty:       { binding: "SVC_CH1TTY",       label: "Ch1tty Gateway",     description: "Identity-bound smart MCP gateway",     tags: { surface: "all", domain: "identity",       audience: "human",   auth: "oauth-ok",        tier: 2 } },
+  chatgpt:      { binding: "SVC_CHATGPT",      label: "ChatGPT Bridge",     description: "ChatGPT connector + proxy",            tags: { surface: "all", domain: "ai",             audience: "both",    auth: "token",           tier: 4 } },
+  cleaner:      { binding: "SVC_CLEANER",      label: "Cleaner",            description: "Cleaning ops + scheduling",            tags: { surface: "all", domain: "ops",            audience: "machine", auth: "service-binding", tier: 4 } },
+  dispatch:     { binding: "SVC_DISPATCH",     label: "Dispatch",           description: "Task dispatch + queueing",             tags: { surface: "all", domain: "ops",            audience: "machine", auth: "service-binding", tier: 3 } },
+  dispute:      { binding: "SVC_DISPUTE",     label: "Dispute",             description: "Dispute intake + comms intelligence",  tags: { surface: "all", domain: "legal",          audience: "both",    auth: "token",           tier: 4 } },
+  gam:          { binding: "SVC_GAM",          label: "GAM",                description: "Google Workspace admin",               tags: { surface: "all", domain: "ops",            audience: "machine", auth: "service-binding", tier: 3 } },
+  helper:       { binding: "SVC_HELPER",       label: "Helper",             description: "Ecosystem navigation + Q&A",           tags: { surface: "all", domain: "meta",           audience: "both",    auth: "token",           tier: 3 } },
+  imessage:     { binding: "SVC_IMESSAGE",     label: "iMessage",           description: "iMessage thread access",               tags: { surface: "all", domain: "messaging",      audience: "human",   auth: "oauth-ok",        tier: 4 } },
+  market:       { binding: "SVC_MARKET",       label: "Market",             description: "ChittyMarket artifact + tooling",      tags: { surface: "all", domain: "platform",       audience: "machine", auth: "service-binding", tier: 2 } },
+  neon:         { binding: "SVC_NEON",         label: "Neon",               description: "Neon Postgres ops + branches",         tags: { surface: "all", domain: "infra",          audience: "machine", auth: "service-binding", tier: 2 } },
+  notes:        { binding: "SVC_NOTES",        label: "Notes",              description: "Cross-channel notes + knowledge",      tags: { surface: "all", domain: "knowledge",      audience: "both",    auth: "token",           tier: 4 } },
+  notion:       { binding: "SVC_NOTION",       label: "Notion",             description: "Notion workspace ops",                 tags: { surface: "all", domain: "knowledge",      audience: "both",    auth: "token",           tier: 4 } },
+  orchestrator: { binding: "SVC_ORCHESTRATOR", label: "Orchestrator",       description: "Skill + agent dispatch",               tags: { surface: "all", domain: "meta",           audience: "both",    auth: "token",           tier: 2 } },
+  quo:          { binding: "SVC_QUO",          label: "Quo",                description: "Quo unified messaging",                tags: { surface: "all", domain: "messaging",      audience: "both",    auth: "token",           tier: 4 } },
+  resolve:      { binding: "SVC_RESOLVE",      label: "Resolve",            description: "Resolution + escalation",              tags: { surface: "all", domain: "ops",            audience: "machine", auth: "service-binding", tier: 4 } },
+  scrape:       { binding: "SVC_SCRAPE",       label: "Scrape",             description: "Web scraping + extraction",            tags: { surface: "all", domain: "ingest",         audience: "machine", auth: "service-binding", tier: 3 } },
+  ship:         { binding: "SVC_SHIP",         label: "Ship",               description: "Deploy + branch lifecycle",            tags: { surface: "all", domain: "infra",          audience: "machine", auth: "service-binding", tier: 3 } },
+  storage:      { binding: "SVC_STORAGE",      label: "Storage",            description: "Content-addressed document storage",   tags: { surface: "all", domain: "storage",        audience: "machine", auth: "service-binding", tier: 2 } },
 };
 
 function corsHeaders(): Record<string, string> {
@@ -53,20 +90,12 @@ function corsHeaders(): Record<string, string> {
   };
 }
 
-/**
- * Fail-closed Bearer token check for MCP surface routes.
- * Returns null on success, or a 401 Response on failure.
- */
+/** Fail-closed Bearer check. Returns null on success, or a 401/503. */
 function requireBearerToken(request: Request, env: Env): Response | null {
   const expected = env.MCP_API_KEY;
   if (!expected) {
-    // Misconfiguration: refuse to serve until the secret is provisioned.
     return new Response(
-      JSON.stringify({
-        jsonrpc: "2.0",
-        id: null,
-        error: { code: -32001, message: "MCP_API_KEY not configured on aggregator" },
-      }),
+      JSON.stringify({ jsonrpc: "2.0", id: null, error: { code: -32001, message: "MCP_API_KEY not configured on aggregator" } }),
       { status: 503, headers: { "Content-Type": "application/json", ...corsHeaders() } },
     );
   }
@@ -74,11 +103,7 @@ function requireBearerToken(request: Request, env: Env): Response | null {
   const m = auth.match(/^Bearer\s+(.+)$/i);
   if (!m || m[1] !== expected) {
     return new Response(
-      JSON.stringify({
-        jsonrpc: "2.0",
-        id: null,
-        error: { code: -32001, message: "unauthorized" },
-      }),
+      JSON.stringify({ jsonrpc: "2.0", id: null, error: { code: -32001, message: "unauthorized" } }),
       { status: 401, headers: { "Content-Type": "application/json", ...corsHeaders() } },
     );
   }
@@ -86,13 +111,11 @@ function requireBearerToken(request: Request, env: Env): Response | null {
 }
 
 function sseResponse(data: unknown, headers?: Record<string, string>): Response {
-  return new Response(
-    `event: message\ndata: ${JSON.stringify(data)}\n\n`,
-    { headers: { "Content-Type": "text/event-stream", ...corsHeaders(), ...headers } },
-  );
+  return new Response(`event: message\ndata: ${JSON.stringify(data)}\n\n`, {
+    headers: { "Content-Type": "text/event-stream", ...corsHeaders(), ...headers },
+  });
 }
 
-/** Discover tools from a service binding via MCP initialize + tools/list */
 async function discoverTools(
   service: Fetcher,
   serviceId: string,
@@ -101,23 +124,15 @@ async function discoverTools(
     const initResp = await service.fetch(
       new Request("https://internal/mcp", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Accept": "application/json, text/event-stream",
-        },
+        headers: { "Content-Type": "application/json", "Accept": "application/json, text/event-stream" },
         body: JSON.stringify({
           jsonrpc: "2.0",
           method: "initialize",
-          params: {
-            protocolVersion: "2025-03-26",
-            capabilities: {},
-            clientInfo: { name: "chittymcp", version: "1.0.0" },
-          },
+          params: { protocolVersion: "2025-03-26", capabilities: {}, clientInfo: { name: "chittymcp", version: "2.0.0" } },
           id: 1,
         }),
       }),
     );
-
     const sessionId = initResp.headers.get("mcp-session-id");
     if (!sessionId) return [];
 
@@ -129,16 +144,10 @@ async function discoverTools(
           "Accept": "application/json, text/event-stream",
           "Mcp-Session-Id": sessionId,
         },
-        body: JSON.stringify({
-          jsonrpc: "2.0",
-          method: "tools/list",
-          id: 2,
-        }),
+        body: JSON.stringify({ jsonrpc: "2.0", method: "tools/list", id: 2 }),
       }),
     );
 
-    // The bound service may reply as either SSE (text/event-stream) or
-    // plain JSON-RPC (application/json) — handle both content types.
     const contentType = listResp.headers.get("content-type") || "";
     let parsed: any;
     if (contentType.includes("text/event-stream")) {
@@ -161,7 +170,6 @@ async function discoverTools(
   }
 }
 
-/** Forward a tool call to the right service, stripping the namespace */
 async function forwardToolCall(
   service: Fetcher,
   toolName: string,
@@ -171,23 +179,15 @@ async function forwardToolCall(
   const initResp = await service.fetch(
     new Request("https://internal/mcp", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Accept": "application/json, text/event-stream",
-      },
+      headers: { "Content-Type": "application/json", "Accept": "application/json, text/event-stream" },
       body: JSON.stringify({
         jsonrpc: "2.0",
         method: "initialize",
-        params: {
-          protocolVersion: "2025-03-26",
-          capabilities: {},
-          clientInfo: { name: "chittymcp", version: "1.0.0" },
-        },
+        params: { protocolVersion: "2025-03-26", capabilities: {}, clientInfo: { name: "chittymcp", version: "2.0.0" } },
         id: 99,
       }),
     }),
   );
-
   const sessionId = initResp.headers.get("mcp-session-id");
   if (!sessionId) {
     return sseResponse({
@@ -196,7 +196,6 @@ async function forwardToolCall(
       error: { code: -32000, message: "Failed to establish backend session" },
     });
   }
-
   return service.fetch(
     new Request("https://internal/mcp", {
       method: "POST",
@@ -215,38 +214,67 @@ async function forwardToolCall(
   );
 }
 
+/** Build the /v0.1/servers MCP-spec discovery payload. */
+function buildServersIndex(): Record<string, unknown> {
+  return {
+    servers: Object.entries(SERVICE_MAP).map(([id, s]) => ({
+      id,
+      name: `chittyagent-${id}`,
+      label: s.label,
+      description: s.description,
+      transport: "streamable-http",
+      endpoints: {
+        aggregated: `https://mcp.chitty.cc/${id}/mcp`,
+        canonical: `https://${id}.chitty.cc/mcp`,
+        deployed: `https://${id}.agent.chitty.cc/mcp`,
+      },
+      tags: s.tags,
+    })),
+    generated_at: new Date().toISOString(),
+    aggregator: "chittymcp",
+  };
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
     const path = url.pathname;
 
-    if (request.method === "OPTIONS") {
-      return new Response(null, { headers: corsHeaders() });
-    }
+    if (request.method === "OPTIONS") return new Response(null, { headers: corsHeaders() });
 
-    // Health
     if (request.method === "GET" && path === "/health") {
       return Response.json({
         status: "ok",
         service: "chittymcp",
-        version: "1.0.0",
+        version: "2.0.0",
         services: Object.keys(SERVICE_MAP),
+        count: Object.keys(SERVICE_MAP).length,
       });
     }
 
-    // Service index
+    // MCP-spec discovery. Two paths serve identical content:
+    //   /v0.1/servers          — canonical (needs CF Access bypass policy)
+    //   /.well-known/chitty.json — already bypassed, works from any client
+    if (
+      request.method === "GET" &&
+      (path === "/v0.1/servers" || path === "/.well-known/chitty.json")
+    ) {
+      return Response.json(buildServersIndex(), { headers: corsHeaders() });
+    }
+
     if (request.method === "GET" && (path === "/" || path === "")) {
       return Response.json({
         service: "chittymcp",
         description: "ChittyOS MCP Aggregator",
         aggregated: "/mcp",
+        discovery: "/v0.1/servers",
         services: Object.fromEntries(
-          Object.entries(SERVICE_MAP).map(([id, s]) => [id, { path: `/${id}/mcp`, label: s.label }]),
+          Object.entries(SERVICE_MAP).map(([id, s]) => [id, { path: `/${id}/mcp`, label: s.label, tags: s.tags }]),
         ),
       });
     }
 
-    // Per-service proxy: /dispute/mcp → SVC_DISPUTE /mcp (auth-gated)
+    // Per-service proxy
     for (const [prefix, svc] of Object.entries(SERVICE_MAP)) {
       if (path === `/${prefix}/mcp` || path.startsWith(`/${prefix}/mcp/`)) {
         const authErr = requireBearerToken(request, env);
@@ -258,7 +286,7 @@ export default {
       }
     }
 
-    // Aggregated MCP at /mcp (auth-gated)
+    // Aggregated MCP
     if ((path === "/mcp" || path.startsWith("/mcp/")) && request.method === "POST") {
       const authErr = requireBearerToken(request, env);
       if (authErr) return authErr;
@@ -267,11 +295,7 @@ export default {
       try {
         body = await request.clone().json();
       } catch {
-        return sseResponse({
-          jsonrpc: "2.0",
-          id: null,
-          error: { code: -32700, message: "Parse error: request body is not valid JSON" },
-        });
+        return sseResponse({ jsonrpc: "2.0", id: null, error: { code: -32700, message: "Parse error" } });
       }
 
       if (body.method === "initialize") {
@@ -282,7 +306,7 @@ export default {
             result: {
               protocolVersion: "2025-03-26",
               capabilities: { tools: { listChanged: true } },
-              serverInfo: { name: "chittymcp", version: "1.0.0" },
+              serverInfo: { name: "chittymcp", version: "2.0.0" },
             },
           },
           { "mcp-session-id": crypto.randomUUID() },
@@ -291,16 +315,9 @@ export default {
 
       if (body.method === "tools/list") {
         const results = await Promise.all(
-          Object.entries(SERVICE_MAP).map(async ([id, svc]) => {
-            const service = env[svc.binding] as Fetcher;
-            return discoverTools(service, id);
-          }),
+          Object.entries(SERVICE_MAP).map(async ([id, svc]) => discoverTools(env[svc.binding] as Fetcher, id)),
         );
-        return sseResponse({
-          jsonrpc: "2.0",
-          id: body.id,
-          result: { tools: results.flat() },
-        });
+        return sseResponse({ jsonrpc: "2.0", id: body.id, result: { tools: results.flat() } });
       }
 
       if (body.method === "tools/call") {
@@ -313,7 +330,6 @@ export default {
             error: { code: -32602, message: "Tool must be namespaced: service/tool" },
           });
         }
-
         const serviceId = fullName.slice(0, slash);
         const toolName = fullName.slice(slash + 1);
         const svc = SERVICE_MAP[serviceId];
@@ -324,20 +340,10 @@ export default {
             error: { code: -32602, message: `Unknown service: ${serviceId}. Available: ${Object.keys(SERVICE_MAP).join(", ")}` },
           });
         }
-
-        return forwardToolCall(
-          env[svc.binding] as Fetcher,
-          toolName,
-          body.params?.arguments || {},
-          body.id,
-        );
+        return forwardToolCall(env[svc.binding] as Fetcher, toolName, body.params?.arguments || {}, body.id);
       }
 
-      return sseResponse({
-        jsonrpc: "2.0",
-        id: body.id,
-        error: { code: -32601, message: `Method not found: ${body.method}` },
-      });
+      return sseResponse({ jsonrpc: "2.0", id: body.id, error: { code: -32601, message: `Method not found: ${body.method}` } });
     }
 
     return new Response("Not Found", { status: 404 });
