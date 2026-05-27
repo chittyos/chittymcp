@@ -425,21 +425,27 @@ async function requireBearerTokenAsync(request: Request, env: Env): Promise<Resp
     }
     console.log(`[auth] ${reqUrl} REJECTED jwt-verify-failed bearer_kind=${bearerKind} ua=${ua.slice(0, 60)}`);
   } else if (bearer && bearer.startsWith("oauth:")) {
-    // CF Access OAuth opaque token (`oauth:<id>` or `oauth:<id>:<refresh>`).
-    // Validate by calling CF Access's /cdn-cgi/access/get-identity with the
-    // token as the CF_Authorization cookie. If CF Access recognizes the
-    // session, identity is returned; else 4xx.
+    // CF Access OAuth opaque token. CF Access edge validates the Bearer
+    // when a request hits a CF-Access-gated path. We HEAD a path that's
+    // gated by the mcp-type Access app (NOT in any bypass app) using the
+    // same Bearer. CF Access accepts opaque OAuth tokens issued by its
+    // OAuth flow as valid bearer auth for the Access app whose AUD they
+    // were issued for. Response 401/403/302 = invalid; anything else =
+    // CF Access accepted and forwarded (worker returns 404 because no
+    // route, but the validation signal is "did CF Access let it through").
     try {
-      const r = await fetch("https://chittycorp.cloudflareaccess.com/cdn-cgi/access/get-identity", {
-        headers: { cookie: `CF_Authorization=${bearer}` },
+      const r = await fetch("https://mcp.chitty.cc/admin/cf-validate-bearer", {
+        method: "HEAD",
+        headers: { authorization: `Bearer ${bearer}` },
+        redirect: "manual",
       });
-      if (r.ok) {
+      if (r.status !== 401 && r.status !== 403 && r.status !== 302) {
         console.log(`[auth] ${reqUrl} accepted=cf-access-oauth-opaque ua=${ua.slice(0, 60)}`);
         return null;
       }
-      console.log(`[auth] ${reqUrl} REJECTED oauth-opaque-introspect-${r.status} ua=${ua.slice(0, 60)}`);
+      console.log(`[auth] ${reqUrl} REJECTED oauth-opaque-cf-${r.status} ua=${ua.slice(0, 60)}`);
     } catch (e) {
-      console.log(`[auth] ${reqUrl} REJECTED oauth-opaque-introspect-err ua=${ua.slice(0, 60)}`);
+      console.log(`[auth] ${reqUrl} REJECTED oauth-opaque-err ua=${ua.slice(0, 60)}`);
     }
   } else {
     console.log(`[auth] ${reqUrl} REJECTED no-auth bearer_kind=${bearerKind} cf_jwt=${!!cfJwt} ua=${ua.slice(0, 60)}`);
