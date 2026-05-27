@@ -13,12 +13,8 @@
   },
   "buckets": {
     "A_mcp_layer_live_on_main": {
-      "description": "Worker is live, McpAgent layer is merged to chittyentity main, and the binding is wired in chittymcp/wrangler.jsonc.",
-      "services": ["dispute", "market", "notes", "orchestrator", "quo", "ship", "storage", "ch1tty", "tasks"]
-    },
-    "A2_mcp_layer_branch_pending_merge": {
-      "description": "Worker is live, McpAgent wrap exists on a feat/<name>-mcp-layer branch in chittyentity (deployed but not merged to main). chittymcp binding is in place.",
-      "services": ["alchemist", "auth", "autoassist", "canon", "chatgpt", "cleaner", "dispatch", "evidence", "gam", "helper", "imessage", "neon", "notion", "resolve", "scrape"]
+      "description": "Worker is live, McpAgent layer is merged to chittyentity main, and the binding is wired in chittymcp/wrangler.jsonc. As of 2026-05-27 the 16 backlog feat/*-mcp-layer branches (PRs #271-#287) are all merged.",
+      "services": ["alchemist", "auth", "autoassist", "canon", "chatgpt", "ch1tty", "cleaner", "dispatch", "dispute", "evidence", "gam", "helper", "imessage", "market", "neon", "notes", "notion", "orchestrator", "quo", "resolve", "scrape", "ship", "storage", "tasks"]
     },
     "C_no_mcp_no_deploy": {
       "description": "Worker code exists in chittyentity/workers/ but is not deployed and has no MCP layer. Needs full SOP run: implement tools, deploy, wrap in McpAgent, register, bind.",
@@ -36,28 +32,10 @@
     "chittymsg":  "domain:messaging",
     "ch1tty":     "audience:human AND auth:oauth-ok"
   },
-  "unmerged_branches_blocking_main": [
-    "feat/alchemist-mcp-layer",
-    "feat/auth-mcp-layer",
-    "feat/autoassist-mcp-layer",
-    "feat/canon-mcp-layer",
-    "feat/chatgpt-mcp-layer",
-    "feat/cleaner-mcp-layer",
-    "feat/dispatch-mcp-layer",
-    "feat/evidence-mcp-layer",
-    "feat/gam-mcp-layer",
-    "feat/helper-mcp-layer",
-    "feat/imessage-mcp-layer",
-    "feat/neon-mcp-layer",
-    "feat/notion-mcp-layer",
-    "feat/resolve-mcp-layer",
-    "feat/scrape-mcp-layer",
-    "feat/tasks-mcp-layer"
-  ],
+  "unmerged_branches_blocking_main": [],
   "next_actions": [
-    "Batch-PR or sequentially merge the 16 feat/*-mcp-layer branches in chittyentity",
     "Run scripts/scaffold-mcp.ts against each Bucket C service to produce its McpAgent layer",
-    "For each Bucket C service: implement at least one real tool (no mocks), deploy, wrap, bind",
-    "Refresh this triage doc after each merge / each Bucket C deploy"
+    "For each Bucket C service: implement at least one real tool (no mocks), deploy worker (DNS + custom domain), wrap in McpAgent, register tags, bind in chittymcp/wrangler.jsonc",
+    "Refresh this triage doc after each Bucket C deploy"
   ]
 }
