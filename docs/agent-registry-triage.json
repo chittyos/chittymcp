@@ -1,0 +1,41 @@
+{
+  "$schema": "https://registry.chitty.cc/schemas/mcp-server-triage-v1.json",
+  "generated_at": "2026-05-27",
+  "generated_by": "chittymcp chore/mcp-sop-v1 session",
+  "supersedes": "docs/agent-registry-triage.json@2026-05-26",
+  "canonical_endpoint_pattern": "https://<name>.chitty.cc/mcp",
+  "legacy_endpoint_pattern": "https://<name>.agent.chitty.cc/mcp",
+  "aggregator_endpoint_pattern": "https://mcp.chitty.cc/<name>/mcp",
+  "sop": "docs/MCP-SOP.md",
+  "transport_profile": {
+    "transport": "streamable-http",
+    "auth": "cloudflare-access-bypass + worker-level + chittymcp Bearer MCP_API_KEY"
+  },
+  "buckets": {
+    "A_mcp_layer_live_on_main": {
+      "description": "Worker is live, McpAgent layer is merged to chittyentity main, and the binding is wired in chittymcp/wrangler.jsonc. As of 2026-05-27 the 16 backlog feat/*-mcp-layer branches (PRs #271-#287) are all merged.",
+      "services": ["alchemist", "auth", "autoassist", "canon", "chatgpt", "ch1tty", "cleaner", "dispatch", "dispute", "evidence", "gam", "helper", "imessage", "market", "neon", "notes", "notion", "orchestrator", "quo", "resolve", "scrape", "ship", "storage", "tasks"]
+    },
+    "C_no_mcp_no_deploy": {
+      "description": "Worker code exists in chittyentity/workers/ but is not deployed and has no MCP layer. Needs full SOP run: implement tools, deploy, wrap in McpAgent, register, bind.",
+      "services": ["availability", "bluebubbles", "bridge-consent", "buyflow", "cloudflare", "finance", "human-escalator", "lead-score", "lease-execute", "lease-explain", "quote", "sandbox", "twilio", "viewport", "ui"]
+    }
+  },
+  "endpoint_migration": {
+    "from": "<name>.agent.chitty.cc/mcp",
+    "to": "<name>.chitty.cc/mcp",
+    "status": "in-progress",
+    "tracking": "chittyentity commit d2cc353 (feat: canonicalize {name}.chitty.cc per user override)"
+  },
+  "policy_filters": {
+    "chittymcp":  "surface:all",
+    "chittymsg":  "domain:messaging",
+    "ch1tty":     "audience:human AND auth:oauth-ok"
+  },
+  "unmerged_branches_blocking_main": [],
+  "next_actions": [
+    "Run scripts/scaffold-mcp.ts against each Bucket C service to produce its McpAgent layer",
+    "For each Bucket C service: implement at least one real tool (no mocks), deploy worker (DNS + custom domain), wrap in McpAgent, register tags, bind in chittymcp/wrangler.jsonc",
+    "Refresh this triage doc after each Bucket C deploy"
+  ]
+}
