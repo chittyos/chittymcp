@@ -13,12 +13,20 @@
   },
   "buckets": {
     "A_mcp_layer_live_on_main": {
-      "description": "Worker is live, McpAgent layer is merged to chittyentity main, and the binding is wired in chittymcp/wrangler.jsonc. As of 2026-05-27 the 16 backlog feat/*-mcp-layer branches (PRs #271-#287) are all merged.",
-      "services": ["alchemist", "auth", "autoassist", "canon", "chatgpt", "ch1tty", "cleaner", "dispatch", "dispute", "evidence", "gam", "helper", "imessage", "market", "neon", "notes", "notion", "orchestrator", "quo", "resolve", "scrape", "ship", "storage", "tasks"]
+      "description": "Worker is live, McpAgent layer is merged to chittyentity main, and the binding is wired in chittymcp/wrangler.jsonc. End of 2026-05-27 session: 26 services, +viewport (PR #288, 5 tools) + sandbox (PR #289, 2 tools) + tasks (PR #287, 6 tools) on top of 23 pre-session.",
+      "services": ["alchemist", "auth", "autoassist", "canon", "chatgpt", "ch1tty", "cleaner", "dispatch", "dispute", "evidence", "gam", "helper", "imessage", "market", "neon", "notes", "notion", "orchestrator", "quo", "resolve", "sandbox", "scrape", "ship", "storage", "tasks", "viewport"]
     },
-    "C_no_mcp_no_deploy": {
-      "description": "Worker code exists in chittyentity/workers/ but is not deployed and has no MCP layer. Needs full SOP run: implement tools, deploy, wrap in McpAgent, register, bind.",
-      "services": ["availability", "bluebubbles", "bridge-consent", "buyflow", "cloudflare", "finance", "human-escalator", "lead-score", "lease-execute", "lease-explain", "quote", "sandbox", "twilio", "viewport", "ui"]
+    "C_no_mcp_blocked_on_resources": {
+      "description": "Worker code exists but wrangler.jsonc has TODO_CREATE_KV_NAMESPACE placeholders — deploy would fail without provisioning real CF resources first. Cannot ship per no-mocks rule. Resolve by: (1) provisioning the KV namespaces via chittyagent-cloudflare or wrangler kv:namespace create, (2) updating wrangler.jsonc with the real id, (3) running scripts/scaffold-mcp.ts, (4) implementing at least one real tool body.",
+      "services": ["availability", "bluebubbles", "bridge-consent", "buyflow", "human-escalator", "lead-score", "lease-execute", "lease-explain", "quote", "twilio"]
+    },
+    "C_no_mcp_no_public_route": {
+      "description": "Worker has substantive backend logic but wrangler.jsonc declares no public route (workers_dev:false, no custom_domain). Service-binding-only. Wrapping in McpAgent is feasible, but tools/list verification requires an internal service-binding probe from another worker (e.g., chittymcp aggregator). Defer until aggregator's SERVICE_MAP routes them.",
+      "services": ["cloudflare", "finance"]
+    },
+    "C_not_an_mcp_candidate": {
+      "description": "React/UI worker (app.tsx, client.tsx) — not an MCP server. Excluded from the wrap loop.",
+      "services": ["ui"]
     }
   },
   "endpoint_migration": {
@@ -34,8 +42,15 @@
   },
   "unmerged_branches_blocking_main": [],
   "next_actions": [
-    "Run scripts/scaffold-mcp.ts against each Bucket C service to produce its McpAgent layer",
-    "For each Bucket C service: implement at least one real tool (no mocks), deploy worker (DNS + custom domain), wrap in McpAgent, register tags, bind in chittymcp/wrangler.jsonc",
-    "Refresh this triage doc after each Bucket C deploy"
-  ]
+    "Bucket C_no_mcp_blocked_on_resources (10 services): use chittyagent-cloudflare or `wrangler kv:namespace create <name>` to mint the placeholder KV namespaces; update each wrangler.jsonc with the real id; then run scripts/scaffold-mcp.ts + implement a real tool body before deploy.",
+    "Bucket C_no_mcp_no_public_route (cloudflare, finance): wrap in McpAgent, add SVC_CLOUDFLARE / SVC_FINANCE bindings to chittymcp/wrangler.jsonc, verify via internal probe rather than direct curl.",
+    "Aggregator worker (src/worker/index.ts): reconcile static SERVICE_MAP (9 entries on main, PR #63 path) with the 26 wrangler bindings — either populate the dynamic registry KV or extend SERVICE_MAP.",
+    "Refresh this triage doc after each Bucket C deploy or aggregator reconciliation."
+  ],
+  "session_log_2026_05_27": {
+    "chittymcp_prs_merged": [77, 78],
+    "chittyentity_prs_merged": [271, 272, 273, 274, 275, 276, 278, 279, 280, 281, 282, 283, 284, 285, 286, 287, 288, 289],
+    "services_added_to_aggregator": ["tasks", "viewport", "sandbox"],
+    "new_canonical_artifacts": ["docs/MCP-SOP.md", "scripts/scaffold-mcp.ts"]
+  }
 }
