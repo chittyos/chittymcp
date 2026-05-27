@@ -367,10 +367,6 @@ async function verifyCfAccessJwt(token: string, env: Env): Promise<boolean> {
 }
 
 async function requireBearerTokenAsync(request: Request, env: Env): Promise<Response | null> {
-  // Diagnostic logging — visible via `wrangler tail` to debug connector
-  // OAuth handshake failures (e.g. Claude.ai/ChatGPT MCP portal). Logs
-  // header presence (not values), JWT segment count, and which auth path
-  // accepted/rejected. No secrets/PII logged.
   const reqUrl = new URL(request.url).pathname;
   const cfJwt = request.headers.get("Cf-Access-Jwt-Assertion");
   const authHeader = request.headers.get("Authorization") || "";
@@ -382,6 +378,39 @@ async function requireBearerTokenAsync(request: Request, env: Env): Promise<Resp
   if (cfJwt) {
     console.log(`[auth] ${reqUrl} accepted=cf-access-header ua=${ua.slice(0, 60)}`);
     return null;
+  }
+
+  // CF Access service token headers — /mcp is bypassed in CF Access so the
+  // edge doesn't validate them. Worker proxies the headers to CF Access
+  // get-identity, which accepts service tokens via the same headers and
+  // returns 200 with the bearer identity if valid.
+  const svcId = request.headers.get("CF-Access-Client-Id");
+  const svcSecret = request.headers.get("CF-Access-Client-Secret");
+  if (svcId && svcSecret) {
+    try {
+      // Validate by HEAD'ing a CF-Access-gated path on the same domain with
+      // the same headers. If CF Access at the edge accepts the service
+      // token, response is 200; if invalid, 401/403. We choose /admin/ping
+      // which is a path NOT in any bypass app — CF Access fully gates it
+      // — so its 200 vs 401 is a clean signal of token validity. (We never
+      // implement /admin/ping in the worker; CF Access returns 404 with
+      // our worker as origin AFTER it validates, which still proves the
+      // token is valid because we only see 401 when CF Access rejects.)
+      const r = await fetch("https://mcp.chitty.cc/admin/cf-validate-svc-token", {
+        method: "HEAD",
+        headers: { "CF-Access-Client-Id": svcId, "CF-Access-Client-Secret": svcSecret },
+        redirect: "manual",
+      });
+      // CF Access rejects with 401/302. Anything else (200, 404, etc) means
+      // the request passed CF Access and reached the worker (or beyond).
+      if (r.status !== 401 && r.status !== 302 && r.status !== 403) {
+        console.log(`[auth] ${reqUrl} accepted=cf-access-service-token ua=${ua.slice(0, 60)}`);
+        return null;
+      }
+      console.log(`[auth] ${reqUrl} REJECTED svc-token-${r.status} ua=${ua.slice(0, 60)}`);
+    } catch (e) {
+      console.log(`[auth] ${reqUrl} REJECTED svc-token-err ua=${ua.slice(0, 60)}`);
+    }
   }
 
   if (bearer && env.MCP_API_KEY && bearer === env.MCP_API_KEY) {
