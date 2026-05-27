@@ -351,9 +351,15 @@ async function verifyCfAccessJwt(token: string, env: Env): Promise<boolean> {
     if (!cfAccessJwks) {
       cfAccessJwks = createRemoteJWKSet(new URL("https://chittycorp.cloudflareaccess.com/cdn-cgi/access/certs"));
     }
-    const opts: { issuer: string; audience?: string } = { issuer: "https://chittycorp.cloudflareaccess.com" };
-    if (env.CF_ACCESS_AUD) opts.audience = env.CF_ACCESS_AUD;
-    await jwtVerify(token, cfAccessJwks, opts);
+    // Verify signature + issuer only. CF Access OAuth issues tokens whose
+    // `aud` claim is the DCR-registered client_id (e.g. Claude.ai's
+    // registration), NOT the mcp-type app's AUD. Enforcing CF_ACCESS_AUD
+    // here would falsely reject all OAuth-flow Bearer tokens from clients
+    // like Claude.ai's MCP connector. The mcp-type app's policy gate at
+    // CF Access already enforces app-level authorization upstream.
+    await jwtVerify(token, cfAccessJwks, { issuer: "https://chittycorp.cloudflareaccess.com" });
+    // CF_ACCESS_AUD intentionally NOT enforced — see comment above.
+    void env;
     return true;
   } catch {
     return false;
