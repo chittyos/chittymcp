@@ -14,10 +14,7 @@ interface Env {
   SVC_ALCHEMIST: Fetcher;
   SVC_AUTH: Fetcher;
   SVC_AUTOASSIST: Fetcher;
-  SVC_AVAILABILITY: Fetcher;
   SVC_BLUEBUBBLES: Fetcher;
-  SVC_BRIDGE_CONSENT: Fetcher;
-  SVC_BUYFLOW: Fetcher;
   SVC_CANON: Fetcher;
   SVC_CH1TTY: Fetcher;
   SVC_CHATGPT: Fetcher;
@@ -29,18 +26,13 @@ interface Env {
   SVC_FINANCE: Fetcher;
   SVC_GAM: Fetcher;
   SVC_HELPER: Fetcher;
-  SVC_HUMAN_ESCALATOR: Fetcher;
   SVC_IMESSAGE: Fetcher;
-  SVC_LEAD_SCORE: Fetcher;
-  SVC_LEASE_EXECUTE: Fetcher;
-  SVC_LEASE_EXPLAIN: Fetcher;
   SVC_MARKET: Fetcher;
   SVC_NEON: Fetcher;
   SVC_NOTES: Fetcher;
   SVC_NOTION: Fetcher;
   SVC_ORCHESTRATOR: Fetcher;
   SVC_QUO: Fetcher;
-  SVC_QUOTE: Fetcher;
   SVC_RESOLVE: Fetcher;
   SVC_SANDBOX: Fetcher;
   SVC_SCRAPE: Fetcher;
@@ -86,10 +78,7 @@ const SERVICE_MAP: Record<string, ServiceEntry> = {
   alchemist:        { binding: "SVC_ALCHEMIST",        label: "Alchemist (telemetry + entity graph)" },
   auth:             { binding: "SVC_AUTH",             label: "ChittyAuth (identity + tokens)" },
   autoassist:       { binding: "SVC_AUTOASSIST",       label: "AutoAssist" },
-  availability:     { binding: "SVC_AVAILABILITY",     label: "Availability" },
   bluebubbles:      { binding: "SVC_BLUEBUBBLES",      label: "BlueBubbles bridge" },
-  "bridge-consent": { binding: "SVC_BRIDGE_CONSENT",   label: "Bridge Consent" },
-  buyflow:          { binding: "SVC_BUYFLOW",          label: "Buyflow" },
   canon:            { binding: "SVC_CANON",            label: "Canon (governance)" },
   ch1tty:           { binding: "SVC_CH1TTY",           label: "Ch1tty Gateway" },
   chatgpt:          { binding: "SVC_CHATGPT",          label: "ChatGPT Bridge" },
@@ -101,18 +90,13 @@ const SERVICE_MAP: Record<string, ServiceEntry> = {
   finance:          { binding: "SVC_FINANCE",          label: "Finance (Mercury + Neon)" },
   gam:              { binding: "SVC_GAM",              label: "Google Workspace Admin" },
   helper:           { binding: "SVC_HELPER",           label: "Ecosystem Helper" },
-  "human-escalator": { binding: "SVC_HUMAN_ESCALATOR", label: "Human Escalator" },
   imessage:         { binding: "SVC_IMESSAGE",         label: "iMessage ops" },
-  "lead-score":     { binding: "SVC_LEAD_SCORE",       label: "Lead Score" },
-  "lease-execute":  { binding: "SVC_LEASE_EXECUTE",    label: "Lease Execute" },
-  "lease-explain":  { binding: "SVC_LEASE_EXPLAIN",    label: "Lease Explain" },
   market:           { binding: "SVC_MARKET",           label: "ChittyMarket" },
   neon:             { binding: "SVC_NEON",             label: "Neon Postgres ops" },
   notes:            { binding: "SVC_NOTES",            label: "Notes & Knowledge" },
   notion:           { binding: "SVC_NOTION",           label: "Notion workspace ops" },
   orchestrator:     { binding: "SVC_ORCHESTRATOR",     label: "Orchestrator" },
   quo:              { binding: "SVC_QUO",              label: "Quo unified messaging" },
-  quote:            { binding: "SVC_QUOTE",            label: "Quote" },
   resolve:          { binding: "SVC_RESOLVE",          label: "Resolve" },
   sandbox:          { binding: "SVC_SANDBOX",          label: "Code Mode Sandbox" },
   scrape:           { binding: "SVC_SCRAPE",           label: "Scrape" },
