@@ -47,6 +47,16 @@
     { "binding": "SVC_STORAGE",      "service": "chittyagent-storage" },
     { "binding": "SVC_TASKS",        "service": "chittyagent-tasks" },
     { "binding": "SVC_VIEWPORT",     "service": "chittyagent-viewport" },
-    { "binding": "SVC_SANDBOX",      "service": "chittyagent-sandbox" }
+    { "binding": "SVC_SANDBOX",      "service": "chittyagent-sandbox" },
+    { "binding": "SVC_AVAILABILITY", "service": "chittyagent-availability" },
+    { "binding": "SVC_BLUEBUBBLES", "service": "chittyagent-bluebubbles" },
+    { "binding": "SVC_BRIDGE_CONSENT", "service": "chittyagent-bridge-consent" },
+    { "binding": "SVC_BUYFLOW", "service": "chittyagent-buyflow" },
+    { "binding": "SVC_HUMAN_ESCALATOR", "service": "chittyagent-human-escalator" },
+    { "binding": "SVC_LEAD_SCORE", "service": "chittyagent-lead-score" },
+    { "binding": "SVC_LEASE_EXECUTE", "service": "chittyagent-lease-execute" },
+    { "binding": "SVC_LEASE_EXPLAIN", "service": "chittyagent-lease-explain" },
+    { "binding": "SVC_QUOTE", "service": "chittyagent-quote" },
+    { "binding": "SVC_TWILIO", "service": "chittyagent-twilio" }
   ]
 }
