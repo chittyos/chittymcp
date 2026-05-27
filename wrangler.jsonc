@@ -44,6 +44,9 @@
     { "binding": "SVC_RESOLVE",      "service": "chittyagent-resolve" },
     { "binding": "SVC_SCRAPE",       "service": "chittyagent-scrape" },
     { "binding": "SVC_SHIP",         "service": "chittyagent-ship" },
-    { "binding": "SVC_STORAGE",      "service": "chittyagent-storage" }
+    { "binding": "SVC_STORAGE",      "service": "chittyagent-storage" },
+    { "binding": "SVC_TASKS",        "service": "chittyagent-tasks" },
+    { "binding": "SVC_VIEWPORT",     "service": "chittyagent-viewport" },
+    { "binding": "SVC_SANDBOX",      "service": "chittyagent-sandbox" }
   ]
 }
