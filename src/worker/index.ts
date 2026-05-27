@@ -629,13 +629,39 @@ export default {
       }, { headers: corsHeaders() });
     }
 
-    // NOTE: We intentionally do NOT serve /.well-known/oauth-protected-resource
-    // or /.well-known/oauth-authorization-server here. The Cloudflare Access
-    // mcp-type Application at mcp.chitty.cc serves both natively (per-app
-    // metadata pointing at /authorize, /token, /register on this domain).
-    // Serving them from the worker — even via bypass — broke the connector
-    // OAuth handshake (worker returned static metadata for the wrong issuer
-    // while CF Access expected to own the path). Reference: mcp.ch1tty.com.
+    // OAuth 2.0 Protected Resource metadata (RFC 9728). Empirically the
+    // mcp-type Application at mcp.chitty.cc does NOT publish per-app DCR at
+    // /register (it returns 401 with the current policy set). The team-level
+    // OAuth server at chittycorp.cloudflareaccess.com DOES support public DCR.
+    // Point clients there. Reachable only because a CF Access "bypass" app
+    // is configured for this exact path; otherwise it would be gated.
+    if (request.method === "GET" && path === "/.well-known/oauth-protected-resource") {
+      return Response.json({
+        resource: "https://mcp.chitty.cc",
+        authorization_servers: ["https://chittycorp.cloudflareaccess.com"],
+        bearer_methods_supported: ["header"],
+        resource_documentation: "https://github.com/CHITTYOS/chittymcp/blob/main/docs/MCP-SOP.md",
+      }, { headers: corsHeaders() });
+    }
+
+    // OAuth 2.0 Authorization Server metadata (RFC 8414). Proxy through to
+    // the team-level OAuth server's metadata so MCP clients that fetch this
+    // directly from the resource host get the canonical endpoints.
+    if (request.method === "GET" && path === "/.well-known/oauth-authorization-server") {
+      try {
+        const upstream = await fetch("https://chittycorp.cloudflareaccess.com/.well-known/oauth-authorization-server");
+        const body = await upstream.text();
+        return new Response(body, {
+          status: upstream.status,
+          headers: { "Content-Type": "application/json", ...corsHeaders() },
+        });
+      } catch (err) {
+        return Response.json(
+          { error: "upstream_unreachable", detail: err instanceof Error ? err.message : String(err) },
+          { status: 502, headers: corsHeaders() },
+        );
+      }
+    }
 
     // Everything below depends on the active (posture-filtered) service map.
     const serviceMap = await loadActiveServices(env);
