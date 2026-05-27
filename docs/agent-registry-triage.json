@@ -13,12 +13,8 @@
   },
   "buckets": {
     "A_mcp_layer_live_on_main": {
-      "description": "Worker is live, McpAgent layer is merged to chittyentity main, and SVC_* binding is in chittymcp/wrangler.jsonc. End of 2026-05-27 session: 36 services. Bucket C cleared via PR #290 (KV namespaces minted + 10 wraps).",
-      "services": ["alchemist", "auth", "autoassist", "availability", "bluebubbles", "bridge-consent", "buyflow", "canon", "chatgpt", "ch1tty", "cleaner", "dispatch", "dispute", "evidence", "gam", "helper", "human-escalator", "imessage", "lead-score", "lease-execute", "lease-explain", "market", "neon", "notes", "notion", "orchestrator", "quo", "quote", "resolve", "sandbox", "scrape", "ship", "storage", "tasks", "twilio", "viewport"]
-    },
-    "C_no_public_route_binding_only": {
-      "description": "Worker has substantive backend logic but wrangler.jsonc has no public route (service-binding-only). Wrap-able but verification requires internal probe via aggregator. Defer until chittymcp aggregator's SERVICE_MAP routes them.",
-      "services": ["cloudflare", "finance"]
+      "description": "Worker is live, McpAgent layer merged to chittyentity main, SVC_* binding in chittymcp/wrangler.jsonc and SERVICE_MAP. Aggregator deployed with 38 service bindings. 153 tools live via mcp.chitty.cc/mcp (tools/list). Last 2 added: cloudflare + finance via chittyentity PR #292 + chittymcp PR #85.",
+      "services": ["alchemist", "auth", "autoassist", "availability", "bluebubbles", "bridge-consent", "buyflow", "canon", "chatgpt", "ch1tty", "cleaner", "cloudflare", "dispatch", "dispute", "evidence", "finance", "gam", "helper", "human-escalator", "imessage", "lead-score", "lease-execute", "lease-explain", "market", "neon", "notes", "notion", "orchestrator", "quo", "quote", "resolve", "sandbox", "scrape", "ship", "storage", "tasks", "twilio", "viewport"]
     },
     "C_not_an_mcp_candidate": {
       "description": "React/UI worker (app.tsx, client.tsx) — not an MCP server. Excluded from the wrap loop.",
@@ -38,18 +34,20 @@
   },
   "unmerged_branches_blocking_main": [],
   "next_actions": [
-    "cloudflare, finance: add service-binding-only McpAgent wraps, route via aggregator's SERVICE_MAP. Verify via internal probe from chittymcp.",
-    "Aggregator worker (src/worker/index.ts): reconcile static SERVICE_MAP (9 entries on main, PR #63 path) with the now-36 wrangler bindings — populate the dynamic registry KV or extend SERVICE_MAP to route the 27 newer services.",
-    "Custom domain limit (100 per chitty.cc zone) hit during this session — twilio, bridge-consent, human-escalator deploy to workers.dev only. Consider zone split or pruning unused custom domains.",
-    "Naming cleanup: shell-worker tool names contain hyphens (lead-score_status, lease-execute_status) — should be snake_case per SOP §3 (lead_score_status). Mechanical rename PR.",
-    "Implement real tool bodies for the 6 shell workers beyond <service>_status — each needs domain-specific tools wired to its Hyperdrive backend."
+    "Naming cleanup: shell-worker tool names contain hyphens (lead-score_status, lease-execute_status, bridge-consent_status, human-escalator_status, lease-explain_status). Mechanical sed-rename to snake_case per SOP §3.",
+    "Implement real tool bodies beyond <service>_status for the 6 shell workers (availability, buyflow, lead-score, lease-execute, lease-explain, quote) — each needs domain-specific tools wired to its Hyperdrive backend.",
+    "Aggregator worker (src/worker/index.ts): remove the dead MCP_REGISTRY KV path (PR #63) since static SERVICE_MAP now fully covers 38 services. ~150 LOC simplification.",
+    "Custom domain limit (100 per chitty.cc zone) still affects twilio, bridge-consent, human-escalator, finance, cloudflare (workers.dev only). Consider zone split or domain pruning."
   ],
   "session_log_2026_05_27": {
-    "chittymcp_prs_merged": [77, 78, 79, 80],
-    "chittyentity_prs_merged": [271, 272, 273, 274, 275, 276, 278, 279, 280, 281, 282, 283, 284, 285, 286, 287, 288, 289, 290],
-    "services_added_to_aggregator": ["tasks", "viewport", "sandbox", "availability", "bluebubbles", "bridge-consent", "buyflow", "human-escalator", "lead-score", "lease-execute", "lease-explain", "quote", "twilio"],
+    "chittymcp_prs_merged": [77, 78, 79, 80, 81, 83, 84, 85],
+    "chittyentity_prs_merged": [271, 272, 273, 274, 275, 276, 278, 279, 280, 281, 282, 283, 284, 285, 286, 287, 288, 289, 290, 292],
+    "services_added_to_aggregator": ["tasks", "viewport", "sandbox", "availability", "bluebubbles", "bridge-consent", "buyflow", "human-escalator", "lead-score", "lease-execute", "lease-explain", "quote", "twilio", "cloudflare", "finance"],
     "kv_namespaces_minted": 10,
+    "cf_access_apps_deleted": 9,
+    "cf_access_apps_created": 3,
     "new_canonical_artifacts": ["docs/MCP-SOP.md", "scripts/scaffold-mcp.ts"],
-    "coverage_change": "9 → 36 of 39 services (23% → 92%)"
+    "coverage_change": "9 → 38 of 39 services (23% → 97%; remaining 1 is ui which is not an MCP candidate)",
+    "live_tool_count": 153
   }
 }
