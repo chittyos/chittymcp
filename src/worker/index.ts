@@ -835,7 +835,12 @@ export default {
     }
 
     // Aggregated MCP at /mcp (auth-gated)
-    if ((path === "/mcp" || path.startsWith("/mcp/")) && request.method === "POST") {
+    // Treat `/` (no path) the same as `/mcp` for POST — some MCP clients
+    // (Claude.ai connector when user enters `mcp.chitty.cc` without trailing
+    // `/mcp`) post the JSON-RPC body directly to root. Without this, the
+    // connector probes root, gets the service-index JSON, fails to find
+    // MCP tools, and reports "There was a problem connecting".
+    if ((path === "/" || path === "" || path === "/mcp" || path.startsWith("/mcp/")) && request.method === "POST") {
       const authErr = await requireBearerTokenAsync(request, env);
       if (authErr) return authErr;
 
