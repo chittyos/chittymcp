@@ -752,16 +752,27 @@ export default {
       }
 
       if (body.method === "tools/list") {
-        const results = await Promise.all(
+        // MCP-spec cursor pagination. Some MCP clients (Claude.ai connector
+        // portal as of 2026-05) reject a tools[] array longer than 20.
+        // Default page size 20; clients can pass cursor= to walk pages.
+        const PAGE_SIZE = 20;
+        const allTools = (await Promise.all(
           Object.entries(serviceMap).map(async ([id, svc]) => {
             const service = env[svc.binding] as Fetcher;
             return discoverTools(service, id);
           }),
-        );
+        )).flat();
+        const cursor = typeof body.params?.cursor === "string" ? body.params.cursor : null;
+        const startIdx = cursor ? Math.max(0, parseInt(cursor, 10) || 0) : 0;
+        const slice = allTools.slice(startIdx, startIdx + PAGE_SIZE);
+        const endIdx = startIdx + slice.length;
+        const nextCursor = endIdx < allTools.length ? String(endIdx) : undefined;
+        const result: Record<string, unknown> = { tools: slice };
+        if (nextCursor) result.nextCursor = nextCursor;
         return sseResponse({
           jsonrpc: "2.0",
           id: body.id,
-          result: { tools: results.flat() },
+          result,
         });
       }
 
