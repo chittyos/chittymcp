@@ -395,6 +395,23 @@ async function requireBearerTokenAsync(request: Request, env: Env): Promise<Resp
       return null;
     }
     console.log(`[auth] ${reqUrl} REJECTED jwt-verify-failed bearer_kind=${bearerKind} ua=${ua.slice(0, 60)}`);
+  } else if (bearer && bearer.startsWith("oauth:")) {
+    // CF Access OAuth opaque token (`oauth:<id>` or `oauth:<id>:<refresh>`).
+    // Validate by calling CF Access's /cdn-cgi/access/get-identity with the
+    // token as the CF_Authorization cookie. If CF Access recognizes the
+    // session, identity is returned; else 4xx.
+    try {
+      const r = await fetch("https://chittycorp.cloudflareaccess.com/cdn-cgi/access/get-identity", {
+        headers: { cookie: `CF_Authorization=${bearer}` },
+      });
+      if (r.ok) {
+        console.log(`[auth] ${reqUrl} accepted=cf-access-oauth-opaque ua=${ua.slice(0, 60)}`);
+        return null;
+      }
+      console.log(`[auth] ${reqUrl} REJECTED oauth-opaque-introspect-${r.status} ua=${ua.slice(0, 60)}`);
+    } catch (e) {
+      console.log(`[auth] ${reqUrl} REJECTED oauth-opaque-introspect-err ua=${ua.slice(0, 60)}`);
+    }
   } else {
     console.log(`[auth] ${reqUrl} REJECTED no-auth bearer_kind=${bearerKind} cf_jwt=${!!cfJwt} ua=${ua.slice(0, 60)}`);
   }
@@ -635,33 +652,93 @@ export default {
     // mcp-type Application at mcp.chitty.cc does NOT publish per-app DCR at
     // /register (it returns 401 with the current policy set). The team-level
     // OAuth server at chittycorp.cloudflareaccess.com DOES support public DCR.
-    // Point clients there. Reachable only because a CF Access "bypass" app
-    // is configured for this exact path; otherwise it would be gated.
+    // Per-app OAuth Provider — matches mcp.ch1tty.com pattern. Worker hosts
+    // OAuth endpoints at the resource hostname (https://mcp.chitty.cc/*) and
+    // proxies the actual handshake to Cloudflare Access OAuth. MCP clients
+    // (Claude.ai, ChatGPT) that require AS-equals-resource binding then
+    // accept this server.
+    const TEAM = "https://chittycorp.cloudflareaccess.com";
+    const SELF = "https://mcp.chitty.cc";
+
     if (request.method === "GET" && path === "/.well-known/oauth-protected-resource") {
       return Response.json({
-        resource: "https://mcp.chitty.cc",
-        authorization_servers: ["https://chittycorp.cloudflareaccess.com"],
+        resource: SELF,
+        authorization_servers: [SELF],
         bearer_methods_supported: ["header"],
         resource_documentation: "https://github.com/CHITTYOS/chittymcp/blob/main/docs/MCP-SOP.md",
       }, { headers: corsHeaders() });
     }
 
-    // OAuth 2.0 Authorization Server metadata (RFC 8414). Proxy through to
-    // the team-level OAuth server's metadata so MCP clients that fetch this
-    // directly from the resource host get the canonical endpoints.
     if (request.method === "GET" && path === "/.well-known/oauth-authorization-server") {
+      // Spec-compliant AS metadata advertising worker-hosted endpoints.
+      return Response.json({
+        issuer: SELF,
+        authorization_endpoint: `${SELF}/authorize`,
+        token_endpoint: `${SELF}/token`,
+        registration_endpoint: `${SELF}/register`,
+        revocation_endpoint: `${SELF}/token`,
+        response_types_supported: ["code"],
+        response_modes_supported: ["query"],
+        grant_types_supported: ["authorization_code", "refresh_token"],
+        token_endpoint_auth_methods_supported: ["client_secret_basic", "client_secret_post", "none"],
+        code_challenge_methods_supported: ["S256"],
+        scopes_supported: ["mcp:read", "mcp:invoke"],
+      }, { headers: corsHeaders() });
+    }
+
+    // DCR proxy — forward client registration to CF Access team domain, but
+    // present it as our endpoint. Critical for Claude.ai / ChatGPT which
+    // require AS-equals-resource and use DCR.
+    if (request.method === "POST" && path === "/register") {
       try {
-        const upstream = await fetch("https://chittycorp.cloudflareaccess.com/.well-known/oauth-authorization-server");
-        const body = await upstream.text();
-        return new Response(body, {
+        const body = await request.text();
+        const upstream = await fetch(`${TEAM}/cdn-cgi/access/oauth/registration`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body,
+        });
+        const text = await upstream.text();
+        // Rewrite registration_client_uri to our domain so clients re-use the proxy.
+        const rewritten = text.replace(
+          `${TEAM}/cdn-cgi/access/oauth/registration`,
+          `${SELF}/register`,
+        );
+        return new Response(rewritten, {
           status: upstream.status,
           headers: { "Content-Type": "application/json", ...corsHeaders() },
         });
       } catch (err) {
-        return Response.json(
-          { error: "upstream_unreachable", detail: err instanceof Error ? err.message : String(err) },
-          { status: 502, headers: corsHeaders() },
-        );
+        return Response.json({ error: "upstream_unreachable", detail: String(err).slice(0, 200) }, { status: 502, headers: corsHeaders() });
+      }
+    }
+
+    // Authorization endpoint — 302 to CF Access's authorization endpoint
+    // preserving all query params. CF Access handles the user consent UI.
+    if (request.method === "GET" && path === "/authorize") {
+      const qs = url.search;
+      return Response.redirect(`${TEAM}/cdn-cgi/access/oauth/authorization${qs}`, 302);
+    }
+
+    // Token endpoint — proxy POST body to CF Access. Also handles revocation
+    // since we advertise the same URL for both.
+    if (request.method === "POST" && path === "/token") {
+      try {
+        const body = await request.text();
+        const headers: Record<string, string> = { "content-type": request.headers.get("content-type") || "application/x-www-form-urlencoded" };
+        const auth = request.headers.get("authorization");
+        if (auth) headers.authorization = auth;
+        const upstream = await fetch(`${TEAM}/cdn-cgi/access/oauth/token`, {
+          method: "POST",
+          headers,
+          body,
+        });
+        const text = await upstream.text();
+        return new Response(text, {
+          status: upstream.status,
+          headers: { "Content-Type": "application/json", ...corsHeaders() },
+        });
+      } catch (err) {
+        return Response.json({ error: "upstream_unreachable", detail: String(err).slice(0, 200) }, { status: 502, headers: corsHeaders() });
       }
     }
 
