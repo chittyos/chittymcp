@@ -47,6 +47,8 @@
     { "binding": "SVC_STORAGE",      "service": "chittyagent-storage" },
     { "binding": "SVC_TASKS",        "service": "chittyagent-tasks" },
     { "binding": "SVC_VIEWPORT",     "service": "chittyagent-viewport" },
+    { "binding": "SVC_CLOUDFLARE",   "service": "chittyagent-cloudflare" },
+    { "binding": "SVC_FINANCE",      "service": "chittyagent-finance" },
     { "binding": "SVC_SANDBOX",      "service": "chittyagent-sandbox" },
     { "binding": "SVC_AVAILABILITY", "service": "chittyagent-availability" },
     { "binding": "SVC_BLUEBUBBLES", "service": "chittyagent-bluebubbles" },
