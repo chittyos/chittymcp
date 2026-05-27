@@ -367,24 +367,36 @@ async function verifyCfAccessJwt(token: string, env: Env): Promise<boolean> {
 }
 
 async function requireBearerTokenAsync(request: Request, env: Env): Promise<Response | null> {
-  // Path A — Cloudflare Access already validated upstream. The header is
-  // injected only by CF Access after a policy match.
-  if (request.headers.get("Cf-Access-Jwt-Assertion")) {
-    return null;
-  }
-
-  const auth = request.headers.get("Authorization") || "";
-  const m = auth.match(/^Bearer\s+(.+)$/i);
+  // Diagnostic logging — visible via `wrangler tail` to debug connector
+  // OAuth handshake failures (e.g. Claude.ai/ChatGPT MCP portal). Logs
+  // header presence (not values), JWT segment count, and which auth path
+  // accepted/rejected. No secrets/PII logged.
+  const reqUrl = new URL(request.url).pathname;
+  const cfJwt = request.headers.get("Cf-Access-Jwt-Assertion");
+  const authHeader = request.headers.get("Authorization") || "";
+  const m = authHeader.match(/^Bearer\s+(.+)$/i);
   const bearer = m?.[1];
+  const bearerKind = bearer ? (bearer.split(".").length === 3 ? "jwt" : "opaque") : "none";
+  const ua = request.headers.get("user-agent") || "";
 
-  // Path B — Bearer is the static MCP_API_KEY (service-to-service callers).
-  if (bearer && env.MCP_API_KEY && bearer === env.MCP_API_KEY) {
+  if (cfJwt) {
+    console.log(`[auth] ${reqUrl} accepted=cf-access-header ua=${ua.slice(0, 60)}`);
     return null;
   }
 
-  // Path C — Bearer is a Cloudflare Access JWT (end-user OAuth flow).
+  if (bearer && env.MCP_API_KEY && bearer === env.MCP_API_KEY) {
+    console.log(`[auth] ${reqUrl} accepted=mcp-api-key ua=${ua.slice(0, 60)}`);
+    return null;
+  }
+
   if (bearer && bearer.split(".").length === 3) {
-    if (await verifyCfAccessJwt(bearer, env)) return null;
+    if (await verifyCfAccessJwt(bearer, env)) {
+      console.log(`[auth] ${reqUrl} accepted=cf-access-jwt ua=${ua.slice(0, 60)}`);
+      return null;
+    }
+    console.log(`[auth] ${reqUrl} REJECTED jwt-verify-failed bearer_kind=${bearerKind} ua=${ua.slice(0, 60)}`);
+  } else {
+    console.log(`[auth] ${reqUrl} REJECTED no-auth bearer_kind=${bearerKind} cf_jwt=${!!cfJwt} ua=${ua.slice(0, 60)}`);
   }
 
   // RFC 6750 + RFC 9728: signal the protected-resource metadata location.
