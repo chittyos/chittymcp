@@ -1,93 +1,63 @@
 {
   "$schema": "https://registry.chitty.cc/schemas/mcp-server-triage-v1.json",
-  "generated_at": "2026-05-26",
-  "generated_by": "chittymcp session, live-probed",
+  "generated_at": "2026-05-27",
+  "generated_by": "chittymcp chore/mcp-sop-v1 session",
+  "supersedes": "docs/agent-registry-triage.json@2026-05-26",
   "canonical_endpoint_pattern": "https://<name>.chitty.cc/mcp",
-  "current_working_pattern": "https://<name>.agent.chitty.cc/mcp",
-  "note": "Per-worker bare-domain MCP handlers still need to be added in chittyentity/workers/* (separate repo). Cloudflare Access wildcard policies for *.chitty.cc/mcp also still need to be created (parallel to the existing *.agent.chitty.cc/mcp set).",
+  "legacy_endpoint_pattern": "https://<name>.agent.chitty.cc/mcp",
+  "aggregator_endpoint_pattern": "https://mcp.chitty.cc/<name>/mcp",
+  "sop": "docs/MCP-SOP.md",
   "transport_profile": {
     "transport": "streamable-http",
-    "auth": "cloudflare-access-bypass + worker-level"
+    "auth": "cloudflare-access-bypass + worker-level + chittymcp Bearer MCP_API_KEY"
   },
   "buckets": {
-    "A_route_deployed_at_agent": {
-      "description": "Worker is live and responding at <name>.agent.chitty.cc/mcp (HTTP 302 = Cloudflare Access challenge = route exists). Needs: bare-domain MCP handler + *.chitty.cc Access policy.",
-      "services": [
-        "alchemist", "auth", "autoassist", "canon", "chatgpt", "cleaner",
-        "dispatch", "dispute", "gam", "helper", "imessage", "market", "neon",
-        "notes", "notion", "orchestrator", "quo", "resolve", "scrape", "ship",
-        "storage", "ch1tty"
-      ]
+    "A_mcp_layer_live_on_main": {
+      "description": "Worker is live, McpAgent layer is merged to chittyentity main, and the binding is wired in chittymcp/wrangler.jsonc.",
+      "services": ["dispute", "market", "notes", "orchestrator", "quo", "ship", "storage", "ch1tty", "tasks"]
     },
-    "B_partial_route_only_bare": {
-      "description": "Worker responds on bare hostname but not agent subdomain. tasks shows this pattern.",
-      "services": ["tasks"]
+    "A2_mcp_layer_branch_pending_merge": {
+      "description": "Worker is live, McpAgent wrap exists on a feat/<name>-mcp-layer branch in chittyentity (deployed but not merged to main). chittymcp binding is in place.",
+      "services": ["alchemist", "auth", "autoassist", "canon", "chatgpt", "cleaner", "dispatch", "evidence", "gam", "helper", "imessage", "neon", "notion", "resolve", "scrape"]
     },
-    "C_no_dns_no_route": {
-      "description": "No DNS / worker response on either hostname. Code exists in chittyentity/workers/ but is not deployed.",
-      "services": [
-        "availability", "bluebubbles", "bridge-consent", "buyflow",
-        "human-escalator", "lead-score", "lease-execute", "lease-explain",
-        "quote", "sandbox", "twilio", "viewport", "ui", "evidence",
-        "finance", "cloudflare"
-      ]
+    "C_no_mcp_no_deploy": {
+      "description": "Worker code exists in chittyentity/workers/ but is not deployed and has no MCP layer. Needs full SOP run: implement tools, deploy, wrap in McpAgent, register, bind.",
+      "services": ["availability", "bluebubbles", "bridge-consent", "buyflow", "cloudflare", "finance", "human-escalator", "lead-score", "lease-execute", "lease-explain", "quote", "sandbox", "twilio", "viewport", "ui"]
     }
   },
-  "code_completeness": {
-    "has_tools_and_manifest": [
-      "bluebubbles", "dispute", "notes", "orchestrator", "quo",
-      "ship", "twilio"
-    ],
-    "has_manifest_only": ["ch1tty", "sandbox", "storage", "tasks"],
-    "shell_only_no_tools_no_manifest": [
-      "alchemist", "auth", "autoassist", "availability", "bridge-consent",
-      "buyflow", "canon", "chatgpt", "cleaner", "cloudflare", "dispatch",
-      "evidence", "finance", "gam", "helper", "human-escalator", "imessage",
-      "lead-score", "lease-execute", "lease-explain", "market", "neon",
-      "notion", "quote", "resolve", "scrape", "ui", "viewport"
-    ]
+  "endpoint_migration": {
+    "from": "<name>.agent.chitty.cc/mcp",
+    "to": "<name>.chitty.cc/mcp",
+    "status": "in-progress",
+    "tracking": "chittyentity commit d2cc353 (feat: canonicalize {name}.chitty.cc per user override)"
   },
-  "registrations_to_emit_via_chittyregister": [
-    { "name": "chittyagent-alchemist", "endpoints": ["https://alchemist.chitty.cc/mcp"], "transport": "streamable-http", "status": "bucket_A" },
-    { "name": "chittyagent-auth", "endpoints": ["https://auth.chitty.cc/mcp"], "transport": "streamable-http", "status": "bucket_A" },
-    { "name": "chittyagent-autoassist", "endpoints": ["https://autoassist.chitty.cc/mcp"], "transport": "streamable-http", "status": "bucket_A" },
-    { "name": "chittyagent-canon", "endpoints": ["https://canon.chitty.cc/mcp"], "transport": "streamable-http", "status": "bucket_A" },
-    { "name": "chittyagent-chatgpt", "endpoints": ["https://chatgpt.chitty.cc/mcp"], "transport": "streamable-http", "status": "bucket_A" },
-    { "name": "chittyagent-cleaner", "endpoints": ["https://cleaner.chitty.cc/mcp"], "transport": "streamable-http", "status": "bucket_A" },
-    { "name": "chittyagent-dispatch", "endpoints": ["https://dispatch.chitty.cc/mcp"], "transport": "streamable-http", "status": "bucket_A" },
-    { "name": "chittyagent-dispute", "endpoints": ["https://dispute.chitty.cc/mcp"], "transport": "streamable-http", "status": "bucket_A" },
-    { "name": "chittyagent-gam", "endpoints": ["https://gam.chitty.cc/mcp"], "transport": "streamable-http", "status": "bucket_A" },
-    { "name": "chittyagent-helper", "endpoints": ["https://helper.chitty.cc/mcp"], "transport": "streamable-http", "status": "bucket_A" },
-    { "name": "chittyagent-imessage", "endpoints": ["https://imessage.chitty.cc/mcp"], "transport": "streamable-http", "status": "bucket_A" },
-    { "name": "chittyagent-market", "endpoints": ["https://market.chitty.cc/mcp"], "transport": "streamable-http", "status": "bucket_A" },
-    { "name": "chittyagent-neon", "endpoints": ["https://neon.chitty.cc/mcp"], "transport": "streamable-http", "status": "bucket_A" },
-    { "name": "chittyagent-notes", "endpoints": ["https://notes.chitty.cc/mcp"], "transport": "streamable-http", "status": "bucket_A" },
-    { "name": "chittyagent-notion", "endpoints": ["https://notion.chitty.cc/mcp"], "transport": "streamable-http", "status": "bucket_A" },
-    { "name": "chittyagent-orchestrator", "endpoints": ["https://orchestrator.chitty.cc/mcp"], "transport": "streamable-http", "status": "bucket_A" },
-    { "name": "chittyagent-quo", "endpoints": ["https://quo.chitty.cc/mcp"], "transport": "streamable-http", "status": "bucket_A" },
-    { "name": "chittyagent-resolve", "endpoints": ["https://resolve.chitty.cc/mcp"], "transport": "streamable-http", "status": "bucket_A" },
-    { "name": "chittyagent-scrape", "endpoints": ["https://scrape.chitty.cc/mcp"], "transport": "streamable-http", "status": "bucket_A" },
-    { "name": "chittyagent-ship", "endpoints": ["https://ship.chitty.cc/mcp"], "transport": "streamable-http", "status": "bucket_A" },
-    { "name": "chittyagent-storage", "endpoints": ["https://storage.chitty.cc/mcp"], "transport": "streamable-http", "status": "bucket_A" },
-    { "name": "chittyagent-ch1tty", "endpoints": ["https://ch1tty.chitty.cc/mcp"], "transport": "streamable-http", "status": "bucket_A" }
+  "policy_filters": {
+    "chittymcp":  "surface:all",
+    "chittymsg":  "domain:messaging",
+    "ch1tty":     "audience:human AND auth:oauth-ok"
+  },
+  "unmerged_branches_blocking_main": [
+    "feat/alchemist-mcp-layer",
+    "feat/auth-mcp-layer",
+    "feat/autoassist-mcp-layer",
+    "feat/canon-mcp-layer",
+    "feat/chatgpt-mcp-layer",
+    "feat/cleaner-mcp-layer",
+    "feat/dispatch-mcp-layer",
+    "feat/evidence-mcp-layer",
+    "feat/gam-mcp-layer",
+    "feat/helper-mcp-layer",
+    "feat/imessage-mcp-layer",
+    "feat/neon-mcp-layer",
+    "feat/notion-mcp-layer",
+    "feat/resolve-mcp-layer",
+    "feat/scrape-mcp-layer",
+    "feat/tasks-mcp-layer"
   ],
-  "blockers": {
-    "in_chittymcp_repo": [
-      "Cannot bind to services that aren't deployed (Bucket C) without bare DNS entries existing.",
-      "Wrangler service bindings require the upstream worker to exist in the same Cloudflare account."
-    ],
-    "in_chittyentity_repo": [
-      "Each Bucket-A worker needs a bare-hostname MCP handler so <name>.chitty.cc/mcp resolves (currently returns 404 or 400 on bare while .agent. works).",
-      "Bucket-C workers need actual tool implementations + deploy (no placeholders per global rule)."
-    ],
-    "in_cloudflare_dashboard": [
-      "Need *.chitty.cc/mcp + /.well-known/* + /sse + /authorize + /token + /register Access bypass policies mirroring the existing *.agent.chitty.cc wildcard set.",
-      "Need route bindings <name>.chitty.cc → chittyagent-<name> for each Bucket-A service (or rely on bare-domain handler in worker via custom_domain entries already in wrangler.jsonc)."
-    ],
-    "credentials_not_available_in_this_session": [
-      "CLOUDFLARE_API_TOKEN",
-      "ChittyConnect mint key (to deploy workers)",
-      "Write access path into chittyentity repo from chittymcp session"
-    ]
-  }
+  "next_actions": [
+    "Batch-PR or sequentially merge the 16 feat/*-mcp-layer branches in chittyentity",
+    "Run scripts/scaffold-mcp.ts against each Bucket C service to produce its McpAgent layer",
+    "For each Bucket C service: implement at least one real tool (no mocks), deploy, wrap, bind",
+    "Refresh this triage doc after each merge / each Bucket C deploy"
+  ]
 }
