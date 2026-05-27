@@ -11,15 +11,42 @@
  */
 
 interface Env {
+  SVC_ALCHEMIST: Fetcher;
+  SVC_AUTH: Fetcher;
+  SVC_AUTOASSIST: Fetcher;
+  SVC_AVAILABILITY: Fetcher;
+  SVC_BLUEBUBBLES: Fetcher;
+  SVC_BRIDGE_CONSENT: Fetcher;
+  SVC_BUYFLOW: Fetcher;
+  SVC_CANON: Fetcher;
+  SVC_CH1TTY: Fetcher;
+  SVC_CHATGPT: Fetcher;
+  SVC_CLEANER: Fetcher;
+  SVC_DISPATCH: Fetcher;
   SVC_DISPUTE: Fetcher;
+  SVC_EVIDENCE: Fetcher;
+  SVC_GAM: Fetcher;
+  SVC_HELPER: Fetcher;
+  SVC_HUMAN_ESCALATOR: Fetcher;
+  SVC_IMESSAGE: Fetcher;
+  SVC_LEAD_SCORE: Fetcher;
+  SVC_LEASE_EXECUTE: Fetcher;
+  SVC_LEASE_EXPLAIN: Fetcher;
+  SVC_MARKET: Fetcher;
+  SVC_NEON: Fetcher;
   SVC_NOTES: Fetcher;
+  SVC_NOTION: Fetcher;
+  SVC_ORCHESTRATOR: Fetcher;
+  SVC_QUO: Fetcher;
+  SVC_QUOTE: Fetcher;
+  SVC_RESOLVE: Fetcher;
+  SVC_SANDBOX: Fetcher;
+  SVC_SCRAPE: Fetcher;
   SVC_SHIP: Fetcher;
   SVC_STORAGE: Fetcher;
-  SVC_ROUTER: Fetcher;
-  SVC_COMMAND: Fetcher;
-  SVC_REGISTRY: Fetcher;
-  SVC_CONNECT: Fetcher;
-  SVC_CH1TTY: Fetcher;
+  SVC_TASKS: Fetcher;
+  SVC_TWILIO: Fetcher;
+  SVC_VIEWPORT: Fetcher;
   // MCP_API_KEY: shared secret required for /mcp aggregator + /{service}/mcp proxy.
   // Set via `wrangler secret put MCP_API_KEY`.
   MCP_API_KEY?: string;
@@ -30,6 +57,10 @@ interface Env {
   CHITTYAUTH_ISSUED_MCP_ADMIN_TOKEN?: string;
   CHITTYREGISTER_POSTURE_URL?: string;
   CHITTYAUTH_ISSUED_REGISTER_TOKEN?: string;
+  // Cloudflare Access Application Audience tag for mcp.chitty.cc — when
+  // present, JWT verification requires this aud claim. Optional but
+  // recommended for production.
+  CF_ACCESS_AUD?: string;
 }
 
 type BindingKey = keyof Env;
@@ -50,15 +81,42 @@ interface DynamicServiceEntry {
 }
 
 const SERVICE_MAP: Record<string, ServiceEntry> = {
-  dispute:  { binding: "SVC_DISPUTE",  label: "Dispute Management" },
-  notes:    { binding: "SVC_NOTES",    label: "Notes & Knowledge" },
-  ship:     { binding: "SVC_SHIP",     label: "Ship & Deploy" },
-  storage:  { binding: "SVC_STORAGE",  label: "Document Storage" },
-  router:   { binding: "SVC_ROUTER",   label: "Routing & Delivery" },
-  command:  { binding: "SVC_COMMAND",  label: "Command & Control" },
-  registry: { binding: "SVC_REGISTRY", label: "Service Registry" },
-  connect:  { binding: "SVC_CONNECT",  label: "ChittyConnect Spine" },
-  ch1tty:   { binding: "SVC_CH1TTY",   label: "Ch1tty Gateway" },
+  alchemist:        { binding: "SVC_ALCHEMIST",        label: "Alchemist (telemetry + entity graph)" },
+  auth:             { binding: "SVC_AUTH",             label: "ChittyAuth (identity + tokens)" },
+  autoassist:       { binding: "SVC_AUTOASSIST",       label: "AutoAssist" },
+  availability:     { binding: "SVC_AVAILABILITY",     label: "Availability" },
+  bluebubbles:      { binding: "SVC_BLUEBUBBLES",      label: "BlueBubbles bridge" },
+  "bridge-consent": { binding: "SVC_BRIDGE_CONSENT",   label: "Bridge Consent" },
+  buyflow:          { binding: "SVC_BUYFLOW",          label: "Buyflow" },
+  canon:            { binding: "SVC_CANON",            label: "Canon (governance)" },
+  ch1tty:           { binding: "SVC_CH1TTY",           label: "Ch1tty Gateway" },
+  chatgpt:          { binding: "SVC_CHATGPT",          label: "ChatGPT Bridge" },
+  cleaner:          { binding: "SVC_CLEANER",          label: "Cleaner" },
+  dispatch:         { binding: "SVC_DISPATCH",         label: "Dispatch" },
+  dispute:          { binding: "SVC_DISPUTE",          label: "Dispute Management" },
+  evidence:         { binding: "SVC_EVIDENCE",         label: "Evidence Pipeline" },
+  gam:              { binding: "SVC_GAM",              label: "Google Workspace Admin" },
+  helper:           { binding: "SVC_HELPER",           label: "Ecosystem Helper" },
+  "human-escalator": { binding: "SVC_HUMAN_ESCALATOR", label: "Human Escalator" },
+  imessage:         { binding: "SVC_IMESSAGE",         label: "iMessage ops" },
+  "lead-score":     { binding: "SVC_LEAD_SCORE",       label: "Lead Score" },
+  "lease-execute":  { binding: "SVC_LEASE_EXECUTE",    label: "Lease Execute" },
+  "lease-explain":  { binding: "SVC_LEASE_EXPLAIN",    label: "Lease Explain" },
+  market:           { binding: "SVC_MARKET",           label: "ChittyMarket" },
+  neon:             { binding: "SVC_NEON",             label: "Neon Postgres ops" },
+  notes:            { binding: "SVC_NOTES",            label: "Notes & Knowledge" },
+  notion:           { binding: "SVC_NOTION",           label: "Notion workspace ops" },
+  orchestrator:     { binding: "SVC_ORCHESTRATOR",     label: "Orchestrator" },
+  quo:              { binding: "SVC_QUO",              label: "Quo unified messaging" },
+  quote:            { binding: "SVC_QUOTE",            label: "Quote" },
+  resolve:          { binding: "SVC_RESOLVE",          label: "Resolve" },
+  sandbox:          { binding: "SVC_SANDBOX",          label: "Code Mode Sandbox" },
+  scrape:           { binding: "SVC_SCRAPE",           label: "Scrape" },
+  ship:             { binding: "SVC_SHIP",             label: "Ship & Deploy" },
+  storage:          { binding: "SVC_STORAGE",          label: "Document Storage" },
+  tasks:            { binding: "SVC_TASKS",            label: "Tasks Queue" },
+  twilio:           { binding: "SVC_TWILIO",           label: "Twilio bridge" },
+  viewport:         { binding: "SVC_VIEWPORT",         label: "Session Viewport" },
 };
 
 const MCP_REGISTRY_KEY = "services:v1";
@@ -296,10 +354,69 @@ function corsHeaders(): Record<string, string> {
  * Fail-closed Bearer token check for MCP surface routes.
  * Returns null on success, or a 401 Response on failure.
  */
+// Cache the JWKS in memory per-isolate so verification doesn't fetch on every
+// request. Refreshed by jose's createRemoteJWKSet rotation logic.
+let cfAccessJwks: ReturnType<typeof import("jose").createRemoteJWKSet> | null = null;
+async function verifyCfAccessJwt(token: string, env: Env): Promise<boolean> {
+  try {
+    const { jwtVerify, createRemoteJWKSet } = await import("jose");
+    if (!cfAccessJwks) {
+      cfAccessJwks = createRemoteJWKSet(new URL("https://chittycorp.cloudflareaccess.com/cdn-cgi/access/certs"));
+    }
+    const opts: { issuer: string; audience?: string } = { issuer: "https://chittycorp.cloudflareaccess.com" };
+    if (env.CF_ACCESS_AUD) opts.audience = env.CF_ACCESS_AUD;
+    await jwtVerify(token, cfAccessJwks, opts);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function requireBearerTokenAsync(request: Request, env: Env): Promise<Response | null> {
+  // Path A — Cloudflare Access already validated upstream. The header is
+  // injected only by CF Access after a policy match.
+  if (request.headers.get("Cf-Access-Jwt-Assertion")) {
+    return null;
+  }
+
+  const auth = request.headers.get("Authorization") || "";
+  const m = auth.match(/^Bearer\s+(.+)$/i);
+  const bearer = m?.[1];
+
+  // Path B — Bearer is the static MCP_API_KEY (service-to-service callers).
+  if (bearer && env.MCP_API_KEY && bearer === env.MCP_API_KEY) {
+    return null;
+  }
+
+  // Path C — Bearer is a Cloudflare Access JWT (end-user OAuth flow).
+  if (bearer && bearer.split(".").length === 3) {
+    if (await verifyCfAccessJwt(bearer, env)) return null;
+  }
+
+  // RFC 6750 + RFC 9728: signal the protected-resource metadata location.
+  const wwwAuth =
+    'Bearer realm="chittymcp", error="invalid_token", ' +
+    'error_description="Missing or invalid access token", ' +
+    'resource_metadata="https://mcp.chitty.cc/.well-known/oauth-protected-resource"';
+  return new Response(
+    JSON.stringify({ jsonrpc: "2.0", id: null, error: { code: -32001, message: "unauthorized" } }),
+    {
+      status: 401,
+      headers: { "Content-Type": "application/json", "WWW-Authenticate": wwwAuth, ...corsHeaders() },
+    },
+  );
+}
+
 function requireBearerToken(request: Request, env: Env): Response | null {
+  // Path A — Cloudflare Access already validated the user upstream. The
+  // Cf-Access-Jwt-Assertion header is injected only by CF Access after a
+  // successful policy match, and the worker route is configured behind that
+  // Access app. Treat its presence as proof of OAuth-authenticated access.
+  if (request.headers.get("Cf-Access-Jwt-Assertion")) {
+    return null;
+  }
   const expected = env.MCP_API_KEY;
   if (!expected) {
-    // Misconfiguration: refuse to serve until the secret is provisioned.
     return new Response(
       JSON.stringify({
         jsonrpc: "2.0",
@@ -312,13 +429,26 @@ function requireBearerToken(request: Request, env: Env): Response | null {
   const auth = request.headers.get("Authorization") || "";
   const m = auth.match(/^Bearer\s+(.+)$/i);
   if (!m || m[1] !== expected) {
+    // RFC 6750 + RFC 9728: signal the protected-resource metadata location so
+    // the MCP client can begin the OAuth dance instead of failing opaquely.
+    const wwwAuth =
+      'Bearer realm="chittymcp", error="invalid_token", ' +
+      'error_description="Missing or invalid access token", ' +
+      'resource_metadata="https://mcp.chitty.cc/.well-known/oauth-protected-resource"';
     return new Response(
       JSON.stringify({
         jsonrpc: "2.0",
         id: null,
         error: { code: -32001, message: "unauthorized" },
       }),
-      { status: 401, headers: { "Content-Type": "application/json", ...corsHeaders() } },
+      {
+        status: 401,
+        headers: {
+          "Content-Type": "application/json",
+          "WWW-Authenticate": wwwAuth,
+          ...corsHeaders(),
+        },
+      },
     );
   }
   return null;
@@ -469,9 +599,67 @@ export default {
       return Response.json({
         status: "ok",
         service: "chittymcp",
-        version: "1.0.0",
+        version: "2.0.0",
         services: Object.keys(SERVICE_MAP),
-      });
+        count: Object.keys(SERVICE_MAP).length,
+      }, { headers: corsHeaders() });
+    }
+
+    // Public discovery + OAuth metadata — MUST be reachable without auth so
+    // MCP clients can discover where to authenticate.
+    if (request.method === "GET" && (path === "/v0.1/servers" || path === "/.well-known/chitty.json")) {
+      return Response.json({
+        servers: Object.entries(SERVICE_MAP).map(([id, s]) => ({
+          id,
+          name: `chittyagent-${id}`,
+          label: s.label,
+          transport: "streamable-http",
+          endpoints: {
+            aggregated: `https://mcp.chitty.cc/${id}/mcp`,
+            canonical: `https://${id}.chitty.cc/mcp`,
+          },
+        })),
+        generated_at: new Date().toISOString(),
+        aggregator: "chittymcp",
+        count: Object.keys(SERVICE_MAP).length,
+      }, { headers: corsHeaders() });
+    }
+
+    // OAuth 2.0 Protected Resource metadata (RFC 9728). The real, working
+    // OAuth provider for this zone is Cloudflare Access — it supports DCR
+    // and PKCE and gates the upstream routes. ChittyAuth has no OAuth
+    // endpoints yet (404 on .well-known), so advertising it here would
+    // break the connector handshake.
+    if (request.method === "GET" && path === "/.well-known/oauth-protected-resource") {
+      return Response.json({
+        resource: "https://mcp.chitty.cc",
+        authorization_servers: ["https://chittycorp.cloudflareaccess.com"],
+        scopes_supported: ["mcp:read", "mcp:invoke"],
+        bearer_methods_supported: ["header"],
+        resource_documentation: "https://github.com/CHITTYOS/chittymcp/blob/main/docs/MCP-SOP.md",
+      }, { headers: corsHeaders() });
+    }
+
+    // OAuth 2.0 Authorization Server metadata (RFC 8414) — proxy through to
+    // Cloudflare Access. Some clients fetch this directly from the resource
+    // host rather than following the protected-resource pointer; serve the
+    // upstream answer either way. This route is gated by CF Access in the
+    // current policy, so it may not be reachable without bypass; keep the
+    // code path correct in case the policy is updated.
+    if (request.method === "GET" && path === "/.well-known/oauth-authorization-server") {
+      try {
+        const upstream = await fetch("https://chittycorp.cloudflareaccess.com/.well-known/oauth-authorization-server");
+        const body = await upstream.text();
+        return new Response(body, {
+          status: upstream.status,
+          headers: { "Content-Type": "application/json", ...corsHeaders() },
+        });
+      } catch (err) {
+        return Response.json(
+          { error: "upstream_unreachable", detail: err instanceof Error ? err.message : String(err) },
+          { status: 502, headers: corsHeaders() },
+        );
+      }
     }
 
     // Everything below depends on the active (posture-filtered) service map.
@@ -522,7 +710,7 @@ export default {
     // Per-service proxy: /dispute/mcp → SVC_DISPUTE /mcp (auth-gated, dynamic serviceMap)
     for (const [prefix, svc] of Object.entries(serviceMap)) {
       if (path === `/${prefix}/mcp` || path.startsWith(`/${prefix}/mcp/`)) {
-        const authErr = requireBearerToken(request, env);
+        const authErr = await requireBearerTokenAsync(request, env);
         if (authErr) return authErr;
         const service = env[svc.binding] as Fetcher;
         const newUrl = new URL(request.url);
@@ -533,7 +721,7 @@ export default {
 
     // Aggregated MCP at /mcp (auth-gated)
     if ((path === "/mcp" || path.startsWith("/mcp/")) && request.method === "POST") {
-      const authErr = requireBearerToken(request, env);
+      const authErr = await requireBearerTokenAsync(request, env);
       if (authErr) return authErr;
 
       let body: any;
