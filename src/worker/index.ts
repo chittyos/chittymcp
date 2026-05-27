@@ -22,9 +22,11 @@ interface Env {
   SVC_CH1TTY: Fetcher;
   SVC_CHATGPT: Fetcher;
   SVC_CLEANER: Fetcher;
+  SVC_CLOUDFLARE: Fetcher;
   SVC_DISPATCH: Fetcher;
   SVC_DISPUTE: Fetcher;
   SVC_EVIDENCE: Fetcher;
+  SVC_FINANCE: Fetcher;
   SVC_GAM: Fetcher;
   SVC_HELPER: Fetcher;
   SVC_HUMAN_ESCALATOR: Fetcher;
@@ -92,9 +94,11 @@ const SERVICE_MAP: Record<string, ServiceEntry> = {
   ch1tty:           { binding: "SVC_CH1TTY",           label: "Ch1tty Gateway" },
   chatgpt:          { binding: "SVC_CHATGPT",          label: "ChatGPT Bridge" },
   cleaner:          { binding: "SVC_CLEANER",          label: "Cleaner" },
+  cloudflare:       { binding: "SVC_CLOUDFLARE",       label: "Cloudflare ops" },
   dispatch:         { binding: "SVC_DISPATCH",         label: "Dispatch" },
   dispute:          { binding: "SVC_DISPUTE",          label: "Dispute Management" },
   evidence:         { binding: "SVC_EVIDENCE",         label: "Evidence Pipeline" },
+  finance:          { binding: "SVC_FINANCE",          label: "Finance (Mercury + Neon)" },
   gam:              { binding: "SVC_GAM",              label: "Google Workspace Admin" },
   helper:           { binding: "SVC_HELPER",           label: "Ecosystem Helper" },
   "human-escalator": { binding: "SVC_HUMAN_ESCALATOR", label: "Human Escalator" },
