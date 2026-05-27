@@ -625,42 +625,13 @@ export default {
       }, { headers: corsHeaders() });
     }
 
-    // OAuth 2.0 Protected Resource metadata (RFC 9728). The real, working
-    // OAuth provider for this zone is Cloudflare Access — it supports DCR
-    // and PKCE and gates the upstream routes. ChittyAuth has no OAuth
-    // endpoints yet (404 on .well-known), so advertising it here would
-    // break the connector handshake.
-    if (request.method === "GET" && path === "/.well-known/oauth-protected-resource") {
-      return Response.json({
-        resource: "https://mcp.chitty.cc",
-        authorization_servers: ["https://chittycorp.cloudflareaccess.com"],
-        scopes_supported: ["mcp:read", "mcp:invoke"],
-        bearer_methods_supported: ["header"],
-        resource_documentation: "https://github.com/CHITTYOS/chittymcp/blob/main/docs/MCP-SOP.md",
-      }, { headers: corsHeaders() });
-    }
-
-    // OAuth 2.0 Authorization Server metadata (RFC 8414) — proxy through to
-    // Cloudflare Access. Some clients fetch this directly from the resource
-    // host rather than following the protected-resource pointer; serve the
-    // upstream answer either way. This route is gated by CF Access in the
-    // current policy, so it may not be reachable without bypass; keep the
-    // code path correct in case the policy is updated.
-    if (request.method === "GET" && path === "/.well-known/oauth-authorization-server") {
-      try {
-        const upstream = await fetch("https://chittycorp.cloudflareaccess.com/.well-known/oauth-authorization-server");
-        const body = await upstream.text();
-        return new Response(body, {
-          status: upstream.status,
-          headers: { "Content-Type": "application/json", ...corsHeaders() },
-        });
-      } catch (err) {
-        return Response.json(
-          { error: "upstream_unreachable", detail: err instanceof Error ? err.message : String(err) },
-          { status: 502, headers: corsHeaders() },
-        );
-      }
-    }
+    // NOTE: We intentionally do NOT serve /.well-known/oauth-protected-resource
+    // or /.well-known/oauth-authorization-server here. The Cloudflare Access
+    // mcp-type Application at mcp.chitty.cc serves both natively (per-app
+    // metadata pointing at /authorize, /token, /register on this domain).
+    // Serving them from the worker — even via bypass — broke the connector
+    // OAuth handshake (worker returned static metadata for the wrong issuer
+    // while CF Access expected to own the path). Reference: mcp.ch1tty.com.
 
     // Everything below depends on the active (posture-filtered) service map.
     const serviceMap = await loadActiveServices(env);
