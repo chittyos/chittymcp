@@ -517,6 +517,30 @@ function sseResponse(data: unknown, headers?: Record<string, string>): Response 
   );
 }
 
+// Per-isolate index: exposed tool name → serviceId. Populated during
+// tools/list, read during tools/call. MCP clients always list before call
+// within a session, and Cloudflare keeps the isolate warm, so this is
+// reliable; a prefix-match fallback covers cold-isolate edge cases.
+const TOOL_ROUTE_INDEX = new Map<string, string>();
+
+/** Resolve a tool name to its serviceId: index first, then prefix match. */
+function resolveToolService(
+  toolName: string,
+  serviceMap: Record<string, { binding: BindingKey; label: string }>,
+): string | null {
+  const cached = TOOL_ROUTE_INDEX.get(toolName);
+  if (cached && serviceMap[cached]) return cached;
+  // Fallback: longest underscored-service-id prefix match.
+  let best: string | null = null;
+  for (const id of Object.keys(serviceMap)) {
+    const p = id.replace(/-/g, "_");
+    if (toolName === p || toolName.startsWith(p + "_")) {
+      if (!best || p.length > best.replace(/-/g, "_").length) best = id;
+    }
+  }
+  return best;
+}
+
 /** Discover tools from a service binding via MCP initialize + tools/list */
 async function discoverTools(
   service: Fetcher,
@@ -575,11 +599,16 @@ async function discoverTools(
       parsed = await listResp.json();
     }
     const tools = parsed?.result?.tools ?? [];
-    return tools.map((t: any) => ({
-      ...t,
-      name: `${serviceId}/${t.name}`,
-      description: `[${serviceId}] ${t.description || t.name}`,
-    }));
+    // Pure pass-through: expose each tool by its real upstream name. Tool
+    // names across all services are globally unique (verified — zero
+    // collisions), so no namespace prefix is needed. This keeps names
+    // regex-valid for Claude/ChatGPT (^[a-zA-Z0-9_-]+$, no "/") and avoids
+    // the redundant "alchemist/alchemist_*" the slash-namespace produced.
+    // Populate the route index so tools/call can map name → service.
+    for (const t of tools) {
+      if (t?.name) TOOL_ROUTE_INDEX.set(t.name, serviceId);
+    }
+    return tools;
   } catch (err) {
     console.error(`[ChittyMCP] discover ${serviceId}: ${err}`);
     return [];
@@ -894,27 +923,30 @@ export default {
       }
 
       if (body.method === "tools/call") {
-        const fullName: string = body.params?.name || "";
-        const slash = fullName.indexOf("/");
-        if (slash === -1) {
+        const toolName: string = body.params?.name || "";
+        // Legacy support: accept old "service/tool" form too.
+        if (toolName.includes("/")) {
+          const [sid, ...rest] = toolName.split("/");
+          const svc = serviceMap[sid];
+          if (svc) {
+            return forwardToolCall(env[svc.binding] as Fetcher, rest.join("/"), body.params?.arguments || {}, body.id);
+          }
+        }
+        let serviceId = resolveToolService(toolName, serviceMap);
+        if (!serviceId) {
+          // Cold isolate with empty index — repopulate via a discovery sweep.
+          await Promise.all(Object.entries(serviceMap).map(([id, svc]) =>
+            discoverTools(env[svc.binding] as Fetcher, id)));
+          serviceId = resolveToolService(toolName, serviceMap);
+        }
+        if (!serviceId) {
           return sseResponse({
             jsonrpc: "2.0",
             id: body.id,
-            error: { code: -32602, message: "Tool must be namespaced: service/tool" },
+            error: { code: -32602, message: `Unknown tool: ${toolName}` },
           });
         }
-
-        const serviceId = fullName.slice(0, slash);
-        const toolName = fullName.slice(slash + 1);
         const svc = serviceMap[serviceId];
-        if (!svc) {
-          return sseResponse({
-            jsonrpc: "2.0",
-            id: body.id,
-            error: { code: -32602, message: `Unknown service: ${serviceId}. Available: ${Object.keys(serviceMap).join(", ")}` },
-          });
-        }
-
         return forwardToolCall(
           env[svc.binding] as Fetcher,
           toolName,
