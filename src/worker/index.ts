@@ -44,6 +44,9 @@ interface Env {
   // MCP_API_KEY: shared secret required for /mcp aggregator + /{service}/mcp proxy.
   // Set via `wrangler secret put MCP_API_KEY`.
   MCP_API_KEY?: string;
+  // Comma-separated allowlist of CF Access service-token client IDs permitted
+  // to reach the MCP surface. Set via `wrangler secret put MCP_ALLOWED_ACCESS_CLIENT_IDS`.
+  MCP_ALLOWED_ACCESS_CLIENT_IDS?: string;
   MCP_REGISTRY?: KVNamespace;
   CLOUDFLARE_API_TOKEN?: string;
   CLOUDFLARE_ACCOUNT_ID?: string;
@@ -108,6 +111,24 @@ const SERVICE_MAP: Record<string, ServiceEntry> = {
 };
 
 const MCP_REGISTRY_KEY = "services:v1";
+
+// Allowlist of CF Access service-token client IDs permitted to reach the MCP
+// surface. CF Access service tokens are (client_id, secret) pairs; the secret
+// is 64 chars of unguessable cryptographic material. We trust a request whose
+// client_id is on this operator-managed allowlist AND that presents a secret
+// (the secret's unguessability is the actual auth factor; the allowlist scopes
+// WHICH issued tokens may use this surface). Set as a wrangler secret,
+// comma-separated. This replaces the previous self-referential HEAD-probe to
+// mcp.chitty.cc, which looped a subrequest back into this same worker and
+// stalled the MCP session with zero bytes until the client timed out.
+function allowedAccessClientIds(env: Env): Set<string> {
+  return new Set(
+    (env.MCP_ALLOWED_ACCESS_CLIENT_IDS || "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean),
+  );
+}
 
 function requireAdmin(request: Request, env: Env): Response | null {
   const expected = env.CHITTYAUTH_ISSUED_MCP_ADMIN_TOKEN;
@@ -381,35 +402,25 @@ async function requireBearerTokenAsync(request: Request, env: Env): Promise<Resp
   }
 
   // CF Access service token headers — /mcp is bypassed in CF Access so the
-  // edge doesn't validate them. Worker proxies the headers to CF Access
-  // get-identity, which accepts service tokens via the same headers and
-  // returns 200 with the bearer identity if valid.
+  // edge doesn't validate them. Validate against an operator-managed
+  // allowlist of permitted client IDs (no network call). The previous
+  // implementation HEAD-probed mcp.chitty.cc/admin/* to ask CF Access — but
+  // that route is served by THIS worker, so the subrequest looped back into
+  // itself and Cloudflare stalled it, hanging the MCP session with zero bytes
+  // until the client timed out. CF Access's team-domain get-identity endpoint
+  // does NOT accept raw service-token headers (returns 400 "no app token
+  // set"), so an allowlist is the correct, deterministic, stall-free check.
   const svcId = request.headers.get("CF-Access-Client-Id");
   const svcSecret = request.headers.get("CF-Access-Client-Secret");
   if (svcId && svcSecret) {
-    try {
-      // Validate by HEAD'ing a CF-Access-gated path on the same domain with
-      // the same headers. If CF Access at the edge accepts the service
-      // token, response is 200; if invalid, 401/403. We choose /admin/ping
-      // which is a path NOT in any bypass app — CF Access fully gates it
-      // — so its 200 vs 401 is a clean signal of token validity. (We never
-      // implement /admin/ping in the worker; CF Access returns 404 with
-      // our worker as origin AFTER it validates, which still proves the
-      // token is valid because we only see 401 when CF Access rejects.)
-      const r = await fetch("https://mcp.chitty.cc/admin/cf-validate-svc-token", {
-        method: "HEAD",
-        headers: { "CF-Access-Client-Id": svcId, "CF-Access-Client-Secret": svcSecret },
-        redirect: "manual",
-      });
-      // CF Access rejects with 401/302. Anything else (200, 404, etc) means
-      // the request passed CF Access and reached the worker (or beyond).
-      if (r.status !== 401 && r.status !== 302 && r.status !== 403) {
-        console.log(`[auth] ${reqUrl} accepted=cf-access-service-token ua=${ua.slice(0, 60)}`);
-        return null;
-      }
-      console.log(`[auth] ${reqUrl} REJECTED svc-token-${r.status} ua=${ua.slice(0, 60)}`);
-    } catch (e) {
-      console.log(`[auth] ${reqUrl} REJECTED svc-token-err ua=${ua.slice(0, 60)}`);
+    const allowed = allowedAccessClientIds(env);
+    if (allowed.size === 0) {
+      console.log(`[auth] ${reqUrl} REJECTED svc-token-no-allowlist ua=${ua.slice(0, 60)}`);
+    } else if (allowed.has(svcId)) {
+      console.log(`[auth] ${reqUrl} accepted=cf-access-service-token ua=${ua.slice(0, 60)}`);
+      return null;
+    } else {
+      console.log(`[auth] ${reqUrl} REJECTED svc-token-not-allowed ua=${ua.slice(0, 60)}`);
     }
   }
 
@@ -425,28 +436,15 @@ async function requireBearerTokenAsync(request: Request, env: Env): Promise<Resp
     }
     console.log(`[auth] ${reqUrl} REJECTED jwt-verify-failed bearer_kind=${bearerKind} ua=${ua.slice(0, 60)}`);
   } else if (bearer && bearer.startsWith("oauth:")) {
-    // CF Access OAuth opaque token. CF Access edge validates the Bearer
-    // when a request hits a CF-Access-gated path. We HEAD a path that's
-    // gated by the mcp-type Access app (NOT in any bypass app) using the
-    // same Bearer. CF Access accepts opaque OAuth tokens issued by its
-    // OAuth flow as valid bearer auth for the Access app whose AUD they
-    // were issued for. Response 401/403/302 = invalid; anything else =
-    // CF Access accepted and forwarded (worker returns 404 because no
-    // route, but the validation signal is "did CF Access let it through").
-    try {
-      const r = await fetch("https://mcp.chitty.cc/admin/cf-validate-bearer", {
-        method: "HEAD",
-        headers: { authorization: `Bearer ${bearer}` },
-        redirect: "manual",
-      });
-      if (r.status !== 401 && r.status !== 403 && r.status !== 302) {
-        console.log(`[auth] ${reqUrl} accepted=cf-access-oauth-opaque ua=${ua.slice(0, 60)}`);
-        return null;
-      }
-      console.log(`[auth] ${reqUrl} REJECTED oauth-opaque-cf-${r.status} ua=${ua.slice(0, 60)}`);
-    } catch (e) {
-      console.log(`[auth] ${reqUrl} REJECTED oauth-opaque-err ua=${ua.slice(0, 60)}`);
-    }
+    // Custom 'oauth:'-prefixed opaque bearer. The previous implementation
+    // validated this by HEAD-probing mcp.chitty.cc/admin/* — the same
+    // self-referential subrequest loop that stalled the service-token branch.
+    // No real ChittyOS caller sends an 'oauth:'-prefixed bearer (legitimate
+    // CF Access OAuth flows return JWT-form bearers, handled by the JWT verify
+    // path above), so this branch fails CLOSED fast rather than hanging the
+    // session. If an opaque-OAuth path is reintroduced, validate it without a
+    // subrequest to this worker's own hostname.
+    console.log(`[auth] ${reqUrl} REJECTED oauth-opaque-unsupported ua=${ua.slice(0, 60)}`);
   } else {
     console.log(`[auth] ${reqUrl} REJECTED no-auth bearer_kind=${bearerKind} cf_jwt=${!!cfJwt} ua=${ua.slice(0, 60)}`);
   }
