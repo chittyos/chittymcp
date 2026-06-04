@@ -522,6 +522,11 @@ function sseResponse(data: unknown, headers?: Record<string, string>): Response 
 // within a session, and Cloudflare keeps the isolate warm, so this is
 // reliable; a prefix-match fallback covers cold-isolate edge cases.
 const TOOL_ROUTE_INDEX = new Map<string, string>();
+// Same pattern for prompts (name → serviceId) and resources (uri → serviceId).
+// Populated during prompts/list and resources/list respectively. Pass-through
+// naming, consistent with the post-#104 tools convention.
+const PROMPT_ROUTE_INDEX = new Map<string, string>();
+const RESOURCE_ROUTE_INDEX = new Map<string, string>();
 
 /** Resolve a tool name to its serviceId: index first, then prefix match. */
 function resolveToolService(
@@ -613,6 +618,162 @@ async function discoverTools(
     console.error(`[ChittyMCP] discover ${serviceId}: ${err}`);
     return [];
   }
+}
+
+/**
+ * Generic per-service MCP list call.
+ *
+ * Discovers items from a bound service for an MCP list-style method
+ * (`prompts/list`, `resources/list`, ...). Tolerates upstreams that don't
+ * implement the method — a `-32601 Method not found` becomes an empty list
+ * so one missing upstream cannot nuke the aggregate response.
+ *
+ * Returns the raw item array (or [] on error/missing) — caller decides how
+ * to index/namespace.
+ */
+async function discoverMcpItems(
+  service: Fetcher,
+  serviceId: string,
+  method: "prompts/list" | "resources/list",
+  resultKey: "prompts" | "resources",
+): Promise<unknown[]> {
+  try {
+    const initResp = await service.fetch(
+      new Request("https://internal/mcp", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Accept": "application/json, text/event-stream",
+        },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          method: "initialize",
+          params: {
+            protocolVersion: "2025-03-26",
+            capabilities: { prompts: {}, resources: {} },
+            clientInfo: { name: "chittymcp", version: "1.0.0" },
+          },
+          id: 1,
+        }),
+      }),
+    );
+
+    const sessionId = initResp.headers.get("mcp-session-id");
+    if (!sessionId) return [];
+
+    const listResp = await service.fetch(
+      new Request("https://internal/mcp", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Accept": "application/json, text/event-stream",
+          "Mcp-Session-Id": sessionId,
+        },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          method,
+          id: 2,
+        }),
+      }),
+    );
+
+    const contentType = listResp.headers.get("content-type") || "";
+    let parsed: any;
+    if (contentType.includes("text/event-stream")) {
+      const text = await listResp.text();
+      const dataLine = text.split("\n").find((l) => l.startsWith("data: "));
+      if (!dataLine) return [];
+      parsed = JSON.parse(dataLine.slice(6));
+    } else {
+      parsed = await listResp.json();
+    }
+    // -32601 Method not found is expected for services that don't yet
+    // expose prompts/resources — treat as empty, not error.
+    if (parsed?.error?.code === -32601) return [];
+    const items = parsed?.result?.[resultKey];
+    return Array.isArray(items) ? items : [];
+  } catch (err) {
+    console.error(`[ChittyMCP] discover ${method} ${serviceId}: ${err}`);
+    return [];
+  }
+}
+
+async function discoverPrompts(
+  service: Fetcher,
+  serviceId: string,
+): Promise<unknown[]> {
+  const items = await discoverMcpItems(service, serviceId, "prompts/list", "prompts");
+  for (const p of items) {
+    const name = (p as { name?: string })?.name;
+    if (name) PROMPT_ROUTE_INDEX.set(name, serviceId);
+  }
+  return items;
+}
+
+async function discoverResources(
+  service: Fetcher,
+  serviceId: string,
+): Promise<unknown[]> {
+  const items = await discoverMcpItems(service, serviceId, "resources/list", "resources");
+  for (const r of items) {
+    const uri = (r as { uri?: string })?.uri;
+    if (uri) RESOURCE_ROUTE_INDEX.set(uri, serviceId);
+  }
+  return items;
+}
+
+/** Forward a generic JSON-RPC method to a bound service. */
+async function forwardMcpCall(
+  service: Fetcher,
+  method: string,
+  params: unknown,
+  requestId: unknown,
+): Promise<Response> {
+  const initResp = await service.fetch(
+    new Request("https://internal/mcp", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Accept": "application/json, text/event-stream",
+      },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        method: "initialize",
+        params: {
+          protocolVersion: "2025-03-26",
+          capabilities: {},
+          clientInfo: { name: "chittymcp", version: "1.0.0" },
+        },
+        id: 99,
+      }),
+    }),
+  );
+
+  const sessionId = initResp.headers.get("mcp-session-id");
+  if (!sessionId) {
+    return sseResponse({
+      jsonrpc: "2.0",
+      id: requestId,
+      error: { code: -32000, message: "Failed to establish backend session" },
+    });
+  }
+
+  return service.fetch(
+    new Request("https://internal/mcp", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Accept": "application/json, text/event-stream",
+        "Mcp-Session-Id": sessionId,
+      },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        method,
+        params,
+        id: requestId,
+      }),
+    }),
+  );
 }
 
 /** Forward a tool call to the right service, stripping the namespace */
@@ -889,7 +1050,11 @@ export default {
             id: body.id,
             result: {
               protocolVersion: "2025-03-26",
-              capabilities: { tools: { listChanged: true } },
+              capabilities: {
+                tools: { listChanged: true },
+                prompts: { listChanged: true },
+                resources: { listChanged: true, subscribe: false },
+              },
               serverInfo: { name: "chittymcp", version: "1.0.0" },
             },
           },
@@ -953,6 +1118,108 @@ export default {
           body.params?.arguments || {},
           body.id,
         );
+      }
+
+      // Aggregate prompts/list across all bound services. Pass-through naming
+      // (consistent with post-#104 tools convention). Cursor pagination mirrors
+      // tools/list. Per-service `-32601` is tolerated as "no prompts" so a
+      // single unimplemented upstream doesn't fail the aggregate.
+      if (body.method === "prompts/list") {
+        const PAGE_SIZE = 50;
+        const allPrompts = (await Promise.all(
+          Object.entries(serviceMap).map(([id, svc]) =>
+            discoverPrompts(env[svc.binding] as Fetcher, id),
+          ),
+        )).flat();
+        const cursor = typeof body.params?.cursor === "string" ? body.params.cursor : null;
+        const startIdx = cursor ? Math.max(0, parseInt(cursor, 10) || 0) : 0;
+        const slice = allPrompts.slice(startIdx, startIdx + PAGE_SIZE);
+        const endIdx = startIdx + slice.length;
+        const nextCursor = endIdx < allPrompts.length ? String(endIdx) : undefined;
+        const result: Record<string, unknown> = { prompts: slice };
+        if (nextCursor) result.nextCursor = nextCursor;
+        return sseResponse({ jsonrpc: "2.0", id: body.id, result });
+      }
+
+      if (body.method === "prompts/get") {
+        const promptName: string = body.params?.name || "";
+        let serviceId = PROMPT_ROUTE_INDEX.get(promptName) || null;
+        if (!serviceId || !serviceMap[serviceId]) {
+          // Cold isolate — repopulate index via a discovery sweep.
+          await Promise.all(Object.entries(serviceMap).map(([id, svc]) =>
+            discoverPrompts(env[svc.binding] as Fetcher, id)));
+          serviceId = PROMPT_ROUTE_INDEX.get(promptName) || null;
+        }
+        if (!serviceId) {
+          return sseResponse({
+            jsonrpc: "2.0",
+            id: body.id,
+            error: { code: -32602, message: `Unknown prompt: ${promptName}` },
+          });
+        }
+        const svc = serviceMap[serviceId];
+        return forwardMcpCall(
+          env[svc.binding] as Fetcher,
+          "prompts/get",
+          body.params,
+          body.id,
+        );
+      }
+
+      // Aggregate resources/list across all bound services. Resources carry
+      // their own URI scheme (e.g. notion://, file://), so we index by URI
+      // rather than rewriting names. Per-service `-32601` tolerated.
+      if (body.method === "resources/list") {
+        const PAGE_SIZE = 50;
+        const allResources = (await Promise.all(
+          Object.entries(serviceMap).map(([id, svc]) =>
+            discoverResources(env[svc.binding] as Fetcher, id),
+          ),
+        )).flat();
+        const cursor = typeof body.params?.cursor === "string" ? body.params.cursor : null;
+        const startIdx = cursor ? Math.max(0, parseInt(cursor, 10) || 0) : 0;
+        const slice = allResources.slice(startIdx, startIdx + PAGE_SIZE);
+        const endIdx = startIdx + slice.length;
+        const nextCursor = endIdx < allResources.length ? String(endIdx) : undefined;
+        const result: Record<string, unknown> = { resources: slice };
+        if (nextCursor) result.nextCursor = nextCursor;
+        return sseResponse({ jsonrpc: "2.0", id: body.id, result });
+      }
+
+      if (body.method === "resources/read") {
+        const uri: string = body.params?.uri || "";
+        let serviceId = RESOURCE_ROUTE_INDEX.get(uri) || null;
+        if (!serviceId || !serviceMap[serviceId]) {
+          await Promise.all(Object.entries(serviceMap).map(([id, svc]) =>
+            discoverResources(env[svc.binding] as Fetcher, id)));
+          serviceId = RESOURCE_ROUTE_INDEX.get(uri) || null;
+        }
+        if (!serviceId) {
+          return sseResponse({
+            jsonrpc: "2.0",
+            id: body.id,
+            error: { code: -32602, message: `Unknown resource: ${uri}` },
+          });
+        }
+        const svc = serviceMap[serviceId];
+        return forwardMcpCall(
+          env[svc.binding] as Fetcher,
+          "resources/read",
+          body.params,
+          body.id,
+        );
+      }
+
+      // resources/templates/list — clients may call this to discover URI
+      // templates. No upstream currently advertises templates; return empty
+      // so clients don't crash on -32601. When an upstream starts exposing
+      // templates we'll fan out the same way as resources/list.
+      if (body.method === "resources/templates/list") {
+        return sseResponse({
+          jsonrpc: "2.0",
+          id: body.id,
+          result: { resourceTemplates: [] },
+        });
       }
 
       return sseResponse({
