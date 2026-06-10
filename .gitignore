@@ -46,3 +46,4 @@ mcp-diagnostics-*.html
 # Backups
 .backups/
 *.bak
+.tmp-oauth.mjs

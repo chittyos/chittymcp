@@ -11,6 +11,7 @@
  */
 
 interface Env {
+  SVC_AI: Fetcher;
   SVC_ALCHEMIST: Fetcher;
   SVC_AUTH: Fetcher;
   SVC_AUTOASSIST: Fetcher;
@@ -78,6 +79,7 @@ interface DynamicServiceEntry {
 }
 
 const SERVICE_MAP: Record<string, ServiceEntry> = {
+  ai:               { binding: "SVC_AI",               label: "AI Gateway (chittyclaw)" },
   alchemist:        { binding: "SVC_ALCHEMIST",        label: "Alchemist (telemetry + entity graph)" },
   auth:             { binding: "SVC_AUTH",             label: "ChittyAuth (identity + tokens)" },
   autoassist:       { binding: "SVC_AUTOASSIST",       label: "AutoAssist" },
