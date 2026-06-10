@@ -80,6 +80,12 @@ type BindingKey = keyof Env;
 interface ServiceEntry {
   binding: BindingKey;
   label: string;
+  // Membership category for aggregate sub-views (e.g. /cpa/mcp = finance,
+  // /msg/mcp = communication). Reuses the `category` vocabulary from
+  // ch1tty servers.json (finance, communication, platform, …) — NOT the
+  // CHARTER's `domain:` tag, which was only ever documented, never enforced.
+  // Defaults to "platform" when a dynamic entry omits it.
+  category: string;
 }
 
 interface DynamicServiceEntry {
@@ -87,43 +93,54 @@ interface DynamicServiceEntry {
   sub: string;
   binding: BindingKey;
   label: string;
+  category?: string;
   enabled?: boolean;
   posture?: string;
   trust_score?: number;
 }
 
 const SERVICE_MAP: Record<string, ServiceEntry> = {
-  ai:               { binding: "SVC_AI",               label: "AI Gateway (chittyclaw)" },
-  alchemist:        { binding: "SVC_ALCHEMIST",        label: "Alchemist (telemetry + entity graph)" },
-  auth:             { binding: "SVC_AUTH",             label: "ChittyAuth (identity + tokens)" },
-  autoassist:       { binding: "SVC_AUTOASSIST",       label: "AutoAssist" },
-  bluebubbles:      { binding: "SVC_BLUEBUBBLES",      label: "BlueBubbles bridge" },
-  canon:            { binding: "SVC_CANON",            label: "Canon (governance)" },
-  ch1tty:           { binding: "SVC_CH1TTY",           label: "Ch1tty Gateway" },
-  chatgpt:          { binding: "SVC_CHATGPT",          label: "ChatGPT Bridge" },
-  cleaner:          { binding: "SVC_CLEANER",          label: "Cleaner" },
-  cloudflare:       { binding: "SVC_CLOUDFLARE",       label: "Cloudflare ops" },
-  dispatch:         { binding: "SVC_DISPATCH",         label: "Dispatch" },
-  dispute:          { binding: "SVC_DISPUTE",          label: "Dispute Management" },
-  evidence:         { binding: "SVC_EVIDENCE",         label: "Evidence Pipeline" },
-  finance:          { binding: "SVC_FINANCE",          label: "Finance (Mercury + Neon)" },
-  gam:              { binding: "SVC_GAM",              label: "Google Workspace Admin" },
-  helper:           { binding: "SVC_HELPER",           label: "Ecosystem Helper" },
-  imessage:         { binding: "SVC_IMESSAGE",         label: "iMessage ops" },
-  market:           { binding: "SVC_MARKET",           label: "ChittyMarket" },
-  neon:             { binding: "SVC_NEON",             label: "Neon Postgres ops" },
-  notes:            { binding: "SVC_NOTES",            label: "Notes & Knowledge" },
-  notion:           { binding: "SVC_NOTION",           label: "Notion workspace ops" },
-  orchestrator:     { binding: "SVC_ORCHESTRATOR",     label: "Orchestrator" },
-  quo:              { binding: "SVC_QUO",              label: "Quo unified messaging" },
-  resolve:          { binding: "SVC_RESOLVE",          label: "Resolve" },
-  sandbox:          { binding: "SVC_SANDBOX",          label: "Code Mode Sandbox" },
-  scrape:           { binding: "SVC_SCRAPE",           label: "Scrape" },
-  ship:             { binding: "SVC_SHIP",             label: "Ship & Deploy" },
-  storage:          { binding: "SVC_STORAGE",          label: "Document Storage" },
-  tasks:            { binding: "SVC_TASKS",            label: "Tasks Queue" },
-  twilio:           { binding: "SVC_TWILIO",           label: "Twilio bridge" },
-  viewport:         { binding: "SVC_VIEWPORT",         label: "Session Viewport" },
+  ai:               { binding: "SVC_AI",               label: "AI Gateway (chittyclaw)",            category: "platform" },
+  alchemist:        { binding: "SVC_ALCHEMIST",        label: "Alchemist (telemetry + entity graph)", category: "platform" },
+  auth:             { binding: "SVC_AUTH",             label: "ChittyAuth (identity + tokens)",     category: "identity" },
+  autoassist:       { binding: "SVC_AUTOASSIST",       label: "AutoAssist",                         category: "communication" },
+  bluebubbles:      { binding: "SVC_BLUEBUBBLES",      label: "BlueBubbles bridge",                 category: "communication" },
+  canon:            { binding: "SVC_CANON",            label: "Canon (governance)",                 category: "governance" },
+  ch1tty:           { binding: "SVC_CH1TTY",           label: "Ch1tty Gateway",                     category: "platform" },
+  chatgpt:          { binding: "SVC_CHATGPT",          label: "ChatGPT Bridge",                     category: "platform" },
+  cleaner:          { binding: "SVC_CLEANER",          label: "Cleaner",                            category: "devops" },
+  cloudflare:       { binding: "SVC_CLOUDFLARE",       label: "Cloudflare ops",                     category: "infra" },
+  dispatch:         { binding: "SVC_DISPATCH",         label: "Dispatch",                           category: "platform" },
+  dispute:          { binding: "SVC_DISPUTE",          label: "Dispute Management",                 category: "communication" },
+  evidence:         { binding: "SVC_EVIDENCE",         label: "Evidence Pipeline",                  category: "legal" },
+  finance:          { binding: "SVC_FINANCE",          label: "Finance (Mercury + Neon)",           category: "finance" },
+  gam:              { binding: "SVC_GAM",              label: "Google Workspace Admin",             category: "infra" },
+  helper:           { binding: "SVC_HELPER",           label: "Ecosystem Helper",                   category: "platform" },
+  imessage:         { binding: "SVC_IMESSAGE",         label: "iMessage ops",                       category: "communication" },
+  market:           { binding: "SVC_MARKET",           label: "ChittyMarket",                       category: "platform" },
+  neon:             { binding: "SVC_NEON",             label: "Neon Postgres ops",                  category: "infra" },
+  notes:            { binding: "SVC_NOTES",            label: "Notes & Knowledge",                  category: "communication" },
+  notion:           { binding: "SVC_NOTION",           label: "Notion workspace ops",               category: "productivity" },
+  orchestrator:     { binding: "SVC_ORCHESTRATOR",     label: "Orchestrator",                       category: "platform" },
+  quo:              { binding: "SVC_QUO",              label: "Quo unified messaging",              category: "communication" },
+  resolve:          { binding: "SVC_RESOLVE",          label: "Resolve",                            category: "devops" },
+  sandbox:          { binding: "SVC_SANDBOX",          label: "Code Mode Sandbox",                  category: "devops" },
+  scrape:           { binding: "SVC_SCRAPE",           label: "Scrape",                             category: "research" },
+  ship:             { binding: "SVC_SHIP",             label: "Ship & Deploy",                      category: "devops" },
+  storage:          { binding: "SVC_STORAGE",          label: "Document Storage",                   category: "infra" },
+  tasks:            { binding: "SVC_TASKS",            label: "Tasks Queue",                        category: "platform" },
+  twilio:           { binding: "SVC_TWILIO",           label: "Twilio bridge",                      category: "communication" },
+  viewport:         { binding: "SVC_VIEWPORT",         label: "Session Viewport",                   category: "platform" },
+};
+
+// Aggregate sub-views: a POST to /{view}/mcp federates only the services whose
+// `category` matches, exposing a focused MCP surface that reuses the same
+// discovery/forward pipeline as the full /mcp aggregate. This makes the
+// CHARTER's per-aggregator membership real (it was doc-only before). New
+// services join a view automatically by declaring the matching category.
+const VIEW_CATEGORIES: Record<string, string> = {
+  cpa: "finance",        // ChittyCPA — money/finance surface (chittyagent-finance, +future stripe/quickbooks/plaid)
+  msg: "communication",  // ChittyMsg — messaging/comms surface (quo, twilio, imessage, bluebubbles, …)
 };
 
 const MCP_REGISTRY_KEY = "services:v1";
@@ -179,7 +196,11 @@ async function loadActiveServices(env: Env): Promise<Record<string, ServiceEntry
     for (const entry of parsed) {
       if (!entry?.id || !entry?.sub || !entry?.binding || !entry?.label) continue;
       if (!isEligibleByPosture(entry)) continue;
-      active[entry.sub] = { binding: entry.binding, label: entry.label };
+      active[entry.sub] = {
+        binding: entry.binding,
+        label: entry.label,
+        category: entry.category || SERVICE_MAP[entry.sub]?.category || "platform",
+      };
     }
     return Object.keys(active).length > 0 ? active : fallback;
   } catch (err) {
@@ -1208,7 +1229,7 @@ async function handleAdminBind(request: Request, env: Env): Promise<Response> {
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
-    const path = url.pathname;
+    let path = url.pathname;
 
     // Cheap branches first — these don't need the dynamic service map and
     // shouldn't pay a KV read per request.
@@ -1341,7 +1362,25 @@ export default {
     }
 
     // Everything below depends on the active (posture-filtered) service map.
-    const serviceMap = await loadActiveServices(env);
+    let serviceMap = await loadActiveServices(env);
+
+    // Aggregate sub-view rewrite: a POST to /{view}/mcp (cpa, msg, …) narrows
+    // the map to the services whose `category` matches that view, then rewrites
+    // the path to /mcp so the existing aggregate pipeline (initialize,
+    // tools/list, tools/call, prompts, resources) runs unchanged over the
+    // filtered set. View names never collide with service ids (checked below),
+    // so the per-service proxy loop is unaffected. Fails CLOSED: an empty
+    // filtered map yields an aggregate with zero tools rather than the full set.
+    for (const [view, category] of Object.entries(VIEW_CATEGORIES)) {
+      if (serviceMap[view]) continue; // a real service named like a view wins
+      if (path === `/${view}/mcp` || path.startsWith(`/${view}/mcp/`)) {
+        serviceMap = Object.fromEntries(
+          Object.entries(serviceMap).filter(([, s]) => s.category === category),
+        );
+        path = path.slice(`/${view}`.length) || "/mcp";
+        break;
+      }
+    }
 
     // Service index
     if (request.method === "GET" && (path === "/" || path === "")) {
