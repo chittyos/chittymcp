@@ -59,6 +59,20 @@ interface Env {
   // present, JWT verification requires this aud claim. Optional but
   // recommended for production.
   CF_ACCESS_AUD?: string;
+  // Inbound auth for POST /admin/bind — beacons from chittyagent-* workers
+  // present this Bearer to request an auto-bind PR. Set via
+  // `wrangler secret put BIND_BEACON_TOKEN`.
+  BIND_BEACON_TOKEN?: string;
+  // GitHub PAT used to open the auto-bind PR against CHITTYOS/chittymcp.
+  // Needs `repo` scope. Set via `wrangler secret put BIND_GH_TOKEN`.
+  BIND_GH_TOKEN?: string;
+  // Optional: GitHub App credentials path is detected but currently
+  // returns not_implemented — PAT path is the supported flow.
+  BIND_GH_APP_ID?: string;
+  BIND_GH_APP_PRIVATE_KEY?: string;
+  BIND_GH_APP_INSTALLATION_ID?: string;
+  // Override the target repo for the auto-bind PR (default CHITTYOS/chittymcp).
+  BIND_GH_REPO?: string;
 }
 
 type BindingKey = keyof Env;
@@ -832,6 +846,365 @@ async function forwardToolCall(
   );
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Auto-bind beacon (POST /admin/bind)
+//
+// chittyagent-<name> workers POST here after a successful deploy. The handler
+// opens a PR against CHITTYOS/chittymcp adding the SVC_<NAME> service binding
+// (wrangler.jsonc) and the SERVICE_MAP / Env entries (src/worker/index.ts).
+// No mocks — real GitHub REST calls via BIND_GH_TOKEN. Fails closed on any
+// upstream error.
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface BindBeaconPayload {
+  service: string;
+  url: string;
+  deploy_id?: string;
+  commit_sha?: string;
+}
+
+const SERVICE_NAME_RE = /^chittyagent-[a-z][a-z0-9-]*$/;
+
+function ghHeaders(token: string): Record<string, string> {
+  return {
+    "authorization": `Bearer ${token}`,
+    "accept": "application/vnd.github+json",
+    "x-github-api-version": "2022-11-28",
+    "user-agent": "chittymcp-auto-bind/1.0",
+    "content-type": "application/json",
+  };
+}
+
+async function ghFetch(
+  token: string,
+  path: string,
+  init?: RequestInit,
+): Promise<{ status: number; body: any; text: string }> {
+  const res = await fetch(`https://api.github.com${path}`, {
+    ...init,
+    headers: { ...ghHeaders(token), ...(init?.headers || {}) },
+  });
+  const text = await res.text();
+  let body: any = null;
+  try { body = text ? JSON.parse(text) : null; } catch { body = null; }
+  return { status: res.status, body, text };
+}
+
+/**
+ * Insert `<binding>: Fetcher;` into the Env interface after the last
+ * `SVC_*: Fetcher;` line, preserving the surrounding 2-space indent.
+ */
+function patchWorkerIndex(source: string, sub: string, bindingName: string, label: string): string {
+  // Insert into Env interface — find last `  SVC_*: Fetcher;` line.
+  const envRegex = /(  SVC_[A-Z0-9_]+: Fetcher;\n)(?![\s\S]*  SVC_[A-Z0-9_]+: Fetcher;\n)/;
+  const envInsert = `  ${bindingName}: Fetcher;\n`;
+  let patched = source.replace(envRegex, (m) => m + envInsert);
+  if (patched === source) {
+    throw new Error("patchWorkerIndex: could not locate last SVC_* line in Env interface");
+  }
+
+  // Insert into SERVICE_MAP — find the closing `};` of `const SERVICE_MAP: ... = {`.
+  // Match the block start and capture up to the closing brace.
+  const mapStart = patched.indexOf("const SERVICE_MAP: Record<string, ServiceEntry> = {");
+  if (mapStart === -1) throw new Error("patchWorkerIndex: SERVICE_MAP not found");
+  // Find the matching `};` that closes that object literal.
+  const mapEnd = patched.indexOf("\n};", mapStart);
+  if (mapEnd === -1) throw new Error("patchWorkerIndex: SERVICE_MAP close not found");
+  const entry = `  ${sub.padEnd(17)} { binding: "${bindingName}",${" ".repeat(Math.max(1, 21 - bindingName.length))}label: ${JSON.stringify(label)} },\n`;
+  patched = patched.slice(0, mapEnd + 1) + entry + patched.slice(mapEnd + 1);
+
+  // Re-key the entry with proper "key:" form. The padEnd above gave us
+  // "<sub>             " — append a colon at the right spot.
+  // Simpler: rebuild the inserted line cleanly.
+  const cleanEntry = `  ${sub}: { binding: "${bindingName}", label: ${JSON.stringify(label)} },\n`;
+  patched = patched.replace(entry, cleanEntry);
+
+  return patched;
+}
+
+/**
+ * Insert a service-binding entry into wrangler.jsonc preserving JSONC comments.
+ * Inserts before the closing `]` of the top-level `"services"` array.
+ */
+function patchWranglerJsonc(source: string, sub: string, bindingName: string): string {
+  const servicesIdx = source.indexOf('"services":');
+  if (servicesIdx === -1) throw new Error("patchWranglerJsonc: services key not found");
+  const openIdx = source.indexOf("[", servicesIdx);
+  if (openIdx === -1) throw new Error("patchWranglerJsonc: services [ not found");
+  // Walk to matching closing bracket (no nested arrays in this section, but be safe).
+  let depth = 0;
+  let closeIdx = -1;
+  for (let i = openIdx; i < source.length; i++) {
+    const c = source[i];
+    if (c === "[") depth++;
+    else if (c === "]") {
+      depth--;
+      if (depth === 0) { closeIdx = i; break; }
+    }
+  }
+  if (closeIdx === -1) throw new Error("patchWranglerJsonc: services ] not found");
+  // Find the last non-whitespace character before closeIdx; if it's `,` we
+  // can just append. If it's `}`, we need to add a comma to the prior line.
+  let j = closeIdx - 1;
+  while (j > openIdx && /\s/.test(source[j])) j--;
+  const trailingChar = source[j];
+  const entry = `    { "binding": "${bindingName}", "service": "chittyagent-${sub}" }`;
+  let insertion: string;
+  let insertAt: number;
+  if (trailingChar === ",") {
+    insertion = `\n${entry}\n  `;
+    insertAt = j + 1;
+  } else if (trailingChar === "}") {
+    // Add comma after the prior entry, then our entry.
+    insertion = `,\n${entry}\n  `;
+    insertAt = j + 1;
+  } else if (trailingChar === "[") {
+    // Empty services array.
+    insertion = `\n${entry}\n  `;
+    insertAt = j + 1;
+  } else {
+    throw new Error(`patchWranglerJsonc: unexpected trailing char ${trailingChar}`);
+  }
+  return source.slice(0, insertAt) + insertion + source.slice(insertAt);
+}
+
+function subFromService(service: string): string {
+  return service.replace(/^chittyagent-/, "");
+}
+
+function bindingNameFromSub(sub: string): string {
+  return "SVC_" + sub.replace(/-/g, "_").toUpperCase();
+}
+
+async function handleAdminBind(request: Request, env: Env): Promise<Response> {
+  // Auth — Bearer must match BIND_BEACON_TOKEN.
+  if (!env.BIND_BEACON_TOKEN) {
+    return Response.json({ error: "bind_beacon_not_configured" }, { status: 503 });
+  }
+  const auth = request.headers.get("authorization") || "";
+  const m = auth.match(/^Bearer\s+(.+)$/i);
+  if (!m || m[1] !== env.BIND_BEACON_TOKEN) {
+    return Response.json({ error: "unauthorized" }, { status: 401 });
+  }
+
+  // Parse + validate.
+  let payload: BindBeaconPayload;
+  try {
+    payload = await request.json() as BindBeaconPayload;
+  } catch {
+    return Response.json({ error: "invalid_json" }, { status: 400 });
+  }
+  if (!payload?.service || !payload?.url) {
+    return Response.json({ error: "missing_fields", required: ["service", "url"] }, { status: 400 });
+  }
+  if (!SERVICE_NAME_RE.test(payload.service)) {
+    return Response.json({ error: "invalid_service_name", service: payload.service }, { status: 400 });
+  }
+  let parsedUrl: URL;
+  try { parsedUrl = new URL(payload.url); } catch {
+    return Response.json({ error: "invalid_url" }, { status: 400 });
+  }
+  if (!parsedUrl.hostname.endsWith(".chitty.cc")) {
+    return Response.json({ error: "url_not_chitty_cc", hostname: parsedUrl.hostname }, { status: 400 });
+  }
+
+  const sub = subFromService(payload.service);
+  const bindingName = bindingNameFromSub(sub);
+
+  // Idempotency check #1 — already in the in-memory SERVICE_MAP.
+  if (SERVICE_MAP[sub]) {
+    return Response.json({ status: "already_bound", reason: "service_map", sub, binding: bindingName });
+  }
+
+  // GitHub App path detected but not implemented — fail loud rather than silent.
+  if (env.BIND_GH_APP_ID || env.BIND_GH_APP_PRIVATE_KEY || env.BIND_GH_APP_INSTALLATION_ID) {
+    if (!env.BIND_GH_TOKEN) {
+      return Response.json(
+        { error: "gh_app_not_implemented", hint: "configure BIND_GH_TOKEN (PAT) for now" },
+        { status: 501 },
+      );
+    }
+  }
+  if (!env.BIND_GH_TOKEN) {
+    return Response.json({ error: "bind_gh_token_not_configured" }, { status: 503 });
+  }
+  const token = env.BIND_GH_TOKEN;
+  const repo = env.BIND_GH_REPO || "CHITTYOS/chittymcp";
+  const branchName = `bot/bind-${sub}`;
+
+  // Idempotency check #2 — open PR or branch already exists.
+  const existingBranch = await ghFetch(token, `/repos/${repo}/branches/${encodeURIComponent(branchName)}`);
+  if (existingBranch.status === 200) {
+    // Look up open PR from that branch.
+    const owner = repo.split("/")[0];
+    const prs = await ghFetch(token, `/repos/${repo}/pulls?state=open&head=${owner}:${encodeURIComponent(branchName)}`);
+    const existingPr = Array.isArray(prs.body) && prs.body[0];
+    if (existingPr) {
+      return Response.json({
+        status: "already_bound",
+        reason: "open_pr_exists",
+        pr_url: existingPr.html_url,
+        pr_number: existingPr.number,
+      });
+    }
+    return Response.json({
+      status: "already_bound",
+      reason: "branch_exists",
+      branch: branchName,
+    });
+  }
+  if (existingBranch.status !== 404) {
+    return Response.json(
+      { error: "github_branch_lookup_failed", status: existingBranch.status, detail: existingBranch.text.slice(0, 500) },
+      { status: 502 },
+    );
+  }
+
+  // Fetch main SHA.
+  const mainRef = await ghFetch(token, `/repos/${repo}/git/ref/heads/main`);
+  if (mainRef.status !== 200 || !mainRef.body?.object?.sha) {
+    return Response.json(
+      { error: "github_main_ref_failed", status: mainRef.status, detail: mainRef.text.slice(0, 500) },
+      { status: 502 },
+    );
+  }
+  const mainSha: string = mainRef.body.object.sha;
+
+  // Fetch the two files we're going to mutate.
+  const wranglerPath = "wrangler.jsonc";
+  const indexPath = "src/worker/index.ts";
+  const wranglerFile = await ghFetch(token, `/repos/${repo}/contents/${wranglerPath}?ref=main`);
+  if (wranglerFile.status !== 200 || !wranglerFile.body?.content) {
+    return Response.json(
+      { error: "github_get_wrangler_failed", status: wranglerFile.status, detail: wranglerFile.text.slice(0, 500) },
+      { status: 502 },
+    );
+  }
+  const indexFile = await ghFetch(token, `/repos/${repo}/contents/${indexPath}?ref=main`);
+  if (indexFile.status !== 200 || !indexFile.body?.content) {
+    return Response.json(
+      { error: "github_get_index_failed", status: indexFile.status, detail: indexFile.text.slice(0, 500) },
+      { status: 502 },
+    );
+  }
+
+  const decode = (b64: string) => {
+    // Workers atob returns Latin1; decode as UTF-8 via TextDecoder.
+    const bin = atob(b64.replace(/\n/g, ""));
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return new TextDecoder("utf-8").decode(bytes);
+  };
+  const encode = (s: string) => {
+    const bytes = new TextEncoder().encode(s);
+    let bin = "";
+    for (const b of bytes) bin += String.fromCharCode(b);
+    return btoa(bin);
+  };
+
+  const wranglerSrc = decode(wranglerFile.body.content);
+  const indexSrc = decode(indexFile.body.content);
+
+  // Idempotency check #3 — already present in main's wrangler.jsonc.
+  if (wranglerSrc.includes(`"service": "${payload.service}"`)) {
+    return Response.json({ status: "already_bound", reason: "wrangler_already_lists" });
+  }
+
+  let nextWrangler: string;
+  let nextIndex: string;
+  try {
+    nextWrangler = patchWranglerJsonc(wranglerSrc, sub, bindingName);
+    const labelTitle = sub.charAt(0).toUpperCase() + sub.slice(1);
+    nextIndex = patchWorkerIndex(indexSrc, sub, bindingName, `${labelTitle} (auto-bound)`);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return Response.json({ error: "patch_failed", detail: msg }, { status: 500 });
+  }
+
+  // Create branch.
+  const createRef = await ghFetch(token, `/repos/${repo}/git/refs`, {
+    method: "POST",
+    body: JSON.stringify({ ref: `refs/heads/${branchName}`, sha: mainSha }),
+  });
+  if (createRef.status !== 201) {
+    return Response.json(
+      { error: "github_create_branch_failed", status: createRef.status, detail: createRef.text.slice(0, 500) },
+      { status: 502 },
+    );
+  }
+
+  const commitMsg = (file: string) =>
+    `feat(aggregator): auto-bind ${payload.service} (${file})\n\nbeacon: ${payload.url}\ndeploy_id: ${payload.deploy_id || "n/a"}\ncommit_sha: ${payload.commit_sha || "n/a"}`;
+
+  const putWrangler = await ghFetch(token, `/repos/${repo}/contents/${wranglerPath}`, {
+    method: "PUT",
+    body: JSON.stringify({
+      message: commitMsg(wranglerPath),
+      content: encode(nextWrangler),
+      sha: wranglerFile.body.sha,
+      branch: branchName,
+    }),
+  });
+  if (putWrangler.status !== 200 && putWrangler.status !== 201) {
+    return Response.json(
+      { error: "github_put_wrangler_failed", status: putWrangler.status, detail: putWrangler.text.slice(0, 500) },
+      { status: 502 },
+    );
+  }
+
+  const putIndex = await ghFetch(token, `/repos/${repo}/contents/${indexPath}`, {
+    method: "PUT",
+    body: JSON.stringify({
+      message: commitMsg(indexPath),
+      content: encode(nextIndex),
+      sha: indexFile.body.sha,
+      branch: branchName,
+    }),
+  });
+  if (putIndex.status !== 200 && putIndex.status !== 201) {
+    return Response.json(
+      { error: "github_put_index_failed", status: putIndex.status, detail: putIndex.text.slice(0, 500) },
+      { status: 502 },
+    );
+  }
+
+  // Open PR.
+  const prBody =
+    `Auto-bind triggered by post-deploy beacon from \`${payload.service}\`.\n\n` +
+    `- url: ${payload.url}\n` +
+    `- deploy_id: \`${payload.deploy_id || "n/a"}\`\n` +
+    `- commit_sha: \`${payload.commit_sha || "n/a"}\`\n\n` +
+    `Adds:\n` +
+    `- \`${bindingName}: Fetcher\` to \`Env\`\n` +
+    `- \`${sub}\` entry to \`SERVICE_MAP\`\n` +
+    `- \`{ binding: "${bindingName}", service: "${payload.service}" }\` to \`wrangler.jsonc\` services[]\n\n` +
+    `Once merged + deployed, aggregator surfaces tools at \`mcp.chitty.cc/${sub}/mcp\`.`;
+  const openPr = await ghFetch(token, `/repos/${repo}/pulls`, {
+    method: "POST",
+    body: JSON.stringify({
+      title: `feat(aggregator): auto-bind ${payload.service}`,
+      head: branchName,
+      base: "main",
+      body: prBody,
+    }),
+  });
+  if (openPr.status !== 201 || !openPr.body?.html_url) {
+    return Response.json(
+      { error: "github_open_pr_failed", status: openPr.status, detail: openPr.text.slice(0, 500) },
+      { status: 502 },
+    );
+  }
+
+  return Response.json({
+    status: "pr_opened",
+    pr_url: openPr.body.html_url,
+    pr_number: openPr.body.number,
+    branch: branchName,
+    binding: bindingName,
+    sub,
+  });
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
@@ -993,6 +1366,12 @@ export default {
           Object.entries(serviceMap).map(([id, s]) => [id, { path: `/${id}/mcp`, label: s.label }]),
         ),
       });
+    }
+
+    // Auto-bind beacon — uses its own BIND_BEACON_TOKEN, not the admin token,
+    // so chittyagent-* workers can call it without holding admin credentials.
+    if (request.method === "POST" && path === "/admin/bind") {
+      return handleAdminBind(request, env);
     }
 
     if (request.method === "POST" && path === "/admin/registry/sync") {
