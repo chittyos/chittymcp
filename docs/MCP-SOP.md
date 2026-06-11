@@ -71,6 +71,70 @@ heartbeat, resolve, validate, ingest, search, render`.
 If a service has >8 tools, group by capability domain in the tool name:
 `storage_object_put`, `storage_object_get`, `storage_bucket_list`.
 
+## 3.5 Prompt & Resource conventions (binding)
+
+Ratified from live precedent in `chittyagent-quo` and `chittyagent-imessage`
+(the first two workers to ship prompts + resources). `chittyagent-quo` is the
+canonical reference implementation — read its `src/prompts.ts` and
+`src/resources.ts`.
+
+### Prompt name
+**Pattern:** `<service>_<verb>` snake_case — **same rule as tools.** The
+aggregator namespaces prompts as `<service>/<prompt>`, so the service prefix
+MUST stay in the inner name for direct-call self-description.
+
+- `quo_triage_inbound`, `quo_summarize_thread`, `imsg_unified_brief` — good.
+- **Bare parity names** (`send_text_message`, `create_contact`) are a
+  sanctioned EXCEPTION, permitted ONLY to shadow a *named external connector's*
+  prompt surface, and MUST carry a justifying comment (e.g.
+  `// Parity prompts — match Quo's official Anthropic connector names`).
+  Absent that, the `<service>_` prefix is mandatory.
+
+A prompt body (the rendered `messages[].content.text`) SHOULD name the concrete
+`<service>_*` tools the LLM is expected to call — prompts orchestrate this
+service's own tools by name.
+
+### Resource URI + name
+**URI scheme:** `<service>://<domain>/<noun>` (kebab segments) — the service's
+OWN scheme. NEVER `chitty://` and NEVER `chittycanon://`.
+
+| Scheme | Owner | Meaning |
+|--------|-------|---------|
+| `chittycanon://` | ChittyGov | canonical governance/service **identity** in the graph |
+| `chitty://` | reserved | ecosystem-internal cross-service references |
+| `<service>://` | the worker | **MCP resource handles** — live, read-only runtime data |
+
+An MCP resource URI is a transport handle for live data, NOT a canonical graph
+identifier — conflating them with `chittycanon://` is a violation.
+Examples: `quo://phone-numbers`, `quo://config/routing`, `imsg://sync/state`.
+
+- **Resource name** (first arg): `<service>_<noun>` snake_case
+  (`quo_phone_numbers`), mirroring tool naming.
+- **MIME type:** explicit, always. `application/json` default; `text/markdown`
+  for rendered docs; `text/plain` for logs.
+
+### Argument schema
+Plain object of Zod validators (NOT a wrapped `z.object()`):
+`argsSchema: { from: e164, body: z.string().min(1) }`. Constrain types
+semantically (shared `e164` regex, `.min(1)`, `.int().min().max()`). Use
+`.describe()` on any argument whose purpose isn't obvious from its name.
+
+### Capabilities
+SDK-derived — do NOT hand-write the `capabilities` block. Calling
+`registerPrompt` / `registerResource` in `init()` makes McpServer advertise the
+`prompts` / `resources` capabilities automatically. Leave `listChanged` /
+`subscribe` OFF unless the list is dynamic or you actually honor
+`resources/subscribe` (declaring `subscribe` without implementing it is a
+non-working-endpoint violation).
+
+### @canon citation
+Cite canon ONCE at the module header of `prompts.ts` / `resources.ts`:
+```ts
+// @canon: chittycanon://gov/governance#core-types
+// @canonical-uri: chittycanon://core/services/chittyagent-<name>
+```
+Do NOT scatter P/L/T/E/A references into individual prompts.
+
 ## 4. The McpAgent wrap (canonical template)
 
 There is **no shared `McpAgent` base class** in `workers/shared/` — `agents/mcp`
@@ -145,6 +209,56 @@ export default {
 ]
 ```
 
+### The prompt/resource wrap (canonical template)
+
+Keep prompts and resources in **separate files** (`prompts.ts`, `resources.ts`) —
+do not inline into the agent class. Register them in `init()` alongside tools.
+
+```ts
+// src/prompts.ts — static templates, no env needed
+// @canon: chittycanon://gov/governance#core-types
+import { z } from "zod";
+import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+
+export function register<Name>Prompts(server: McpServer) {
+  server.registerPrompt(
+    "<service>_<verb>",
+    { title: "<human label>", description: "<what it does + which tools it orchestrates>",
+      argsSchema: { /* zod validators */ } },
+    (args) => ({ messages: [{ role: "user", content: { type: "text", text:
+      [ "<task>", "", "Use `<service>_<tool>` to …" ].join("\n") } }] }),
+  );
+}
+
+// src/resources.ts — LIVE data only, no mocks (see §6)
+// @canon: chittycanon://gov/governance#core-types
+import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+
+export function register<Name>Resources(
+  server: McpServer, env: Env, getCredential: (n: string) => Promise<string>,
+) {
+  server.registerResource(
+    "<service>_<noun>", "<service>://<domain>/<noun>",
+    { title: "<label>", description: "<live data this serves>", mimeType: "application/json" },
+    async (uri) => {
+      const data = await /* real REST client / Neon query / env config */;
+      return { contents: [{ uri: uri.href, mimeType: "application/json",
+        text: JSON.stringify(data, null, 2) }] };
+    },
+  );
+}
+
+// in the agent: async init() {
+//   register<Name>Tools(this.server, this.env);
+//   register<Name>Prompts(this.server);
+//   register<Name>Resources(this.server, this.env, (n) => resolveCredential(this.env, n, SERVICE));
+// }
+```
+
+**No-resource is a valid outcome.** If a service has no real live data to expose
+(a pure-action worker), ship prompts only and say so — do NOT fabricate a
+resource to fill the slot. Mock resources violate §6.
+
 ## 5. Endpoints (binding)
 
 Every service MCP MUST be reachable at three addresses, all serving identical
@@ -166,7 +280,9 @@ clients SHOULD prefer `canonical`.
 - No placeholder route bodies. Every tool calls a real implementation.
 - No `vi.mock(...)` on DB/service modules in new tests.
 - Every PR body MUST include a real `tools/list` curl output from the
-  deployed endpoint as evidence the wrap landed.
+  deployed endpoint as evidence the wrap landed. When the PR adds prompts or
+  resources, it MUST also include `prompts/list` and `resources/list` output
+  from the deployed endpoint — every resource proven to return live data.
 
 ## 7. Step-by-step (the procedure)
 
