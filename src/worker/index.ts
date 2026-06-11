@@ -42,6 +42,7 @@ interface Env {
   SVC_TASKS: Fetcher;
   SVC_TWILIO: Fetcher;
   SVC_VIEWPORT: Fetcher;
+  SVC_BINDINGS: Fetcher;
   // MCP_API_KEY: shared secret required for /mcp aggregator + /{service}/mcp proxy.
   // Set via `wrangler secret put MCP_API_KEY`.
   MCP_API_KEY?: string;
@@ -124,6 +125,7 @@ const SERVICE_MAP: Record<string, ServiceEntry> = {
   tasks:            { binding: "SVC_TASKS",            label: "Tasks Queue" },
   twilio:           { binding: "SVC_TWILIO",           label: "Twilio bridge" },
   viewport:         { binding: "SVC_VIEWPORT",         label: "Session Viewport" },
+  bindings:         { binding: "SVC_BINDINGS",         label: "Service-binding reconciler" },
 };
 
 const MCP_REGISTRY_KEY = "services:v1";
