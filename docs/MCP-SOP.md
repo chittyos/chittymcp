@@ -49,18 +49,28 @@ Each `chittyagent-<name>` worker MUST expose:
 - DO binding (env): `<NAME>_AGENT` (UPPER_SNAKE)
 
 ### Tool name
-**Pattern:** `<service>_<verb>` or `<service>_<noun>_<verb>`. Lowercase snake.
+**Pattern:** `<verb>` or `<noun>_<verb>` — **BARE. Do NOT prefix with the
+service name.** Lowercase snake. The MCP server name (`chittyagent-<name>`) and
+the aggregator namespace already carry the service; repeating it in the tool
+name is redundant and compounds badly through layers.
 
-| Good                   | Bad                  | Reason |
-|------------------------|----------------------|--------|
-| `tasks_list`           | `listTasks`          | wrong case |
-| `auth_resolve_token`   | `resolveAuthToken`   | wrong case |
-| `evidence_ingest`      | `ingest_evidence`    | verb-last |
-| `tasks_lease_claim`    | `claim`              | not namespaced |
+| Good        | Bad                  | Reason |
+|-------------|----------------------|--------|
+| `list`      | `tasks_list`         | service prefix is redundant (server is already `chittyagent-tasks`) |
+| `search`    | `notes_search`       | `chittyagent-notes` already names the service |
+| `resolve_token` | `auth_resolve_token` | drop the `auth_` prefix |
+| `ingest`    | `ingest_evidence`    | verb-last AND redundant |
+| `list`      | `listTasks`          | wrong case |
 
-Aggregators namespace as `<service>/<tool>` (e.g. `tasks/tasks_list`).
-Keep the service prefix in the inner tool name too — clients that bypass
-the aggregator (direct `<name>.chitty.cc/mcp`) still need self-descriptive names.
+**Why bare (binding):** an aggregator namespaces as `<service>/<tool>` and a
+downstream connector adds its OWN name on top. A service-prefixed tool
+therefore triples the service token end-to-end — e.g. `quo_send_message`
+federated through chittymsg and surfaced via the Chitty_Msg connector becomes
+`Chitty_Msg__chittyagent-quo_quo_send_message` ("quo" ×3). Bare `send_message`
+renders as `Chitty_Msg__chittyagent-quo_send_message` — the service appears
+exactly once, where it belongs (the server name). A client connected directly
+to `<name>.chitty.cc/mcp` already knows which server it called, so bare names
+are still self-descriptive there.
 
 ### Verbs
 Canonical verbs (extend cautiously, document if new):
@@ -68,8 +78,8 @@ Canonical verbs (extend cautiously, document if new):
 heartbeat, resolve, validate, ingest, search, render`.
 
 ### Tool grouping
-If a service has >8 tools, group by capability domain in the tool name:
-`storage_object_put`, `storage_object_get`, `storage_bucket_list`.
+If a service has >8 tools, group by capability domain in the tool name (still
+service-prefix-free): `object_put`, `object_get`, `bucket_list`.
 
 ## 3.5 Prompt & Resource conventions (binding)
 
@@ -79,24 +89,23 @@ canonical reference implementation — read its `src/prompts.ts` and
 `src/resources.ts`.
 
 ### Prompt name
-**Pattern:** `<service>_<verb>` snake_case — **same rule as tools.** The
-aggregator namespaces prompts as `<service>/<prompt>`, so the service prefix
-MUST stay in the inner name for direct-call self-description.
-
-- `quo_triage_inbound`, `quo_summarize_thread`, `imsg_unified_brief` — good.
-- **Bare parity names** (`send_text_message`, `create_contact`) are a
-  sanctioned EXCEPTION, permitted ONLY to shadow a *named external connector's*
-  prompt surface, and MUST carry a justifying comment (e.g.
-  `// Parity prompts — match Quo's official Anthropic connector names`).
-  Absent that, the `<service>_` prefix is mandatory.
+**Pattern:** `<verb>` snake_case — **BARE, same rule as tools (§3).** Do NOT
+prefix with the service name; the server + aggregator namespace already carry
+it. `triage_inbound`, `summarize_thread`, `unified_brief` — good.
+`quo_triage_inbound` — bad (redundant `quo_`).
 
 A prompt body (the rendered `messages[].content.text`) SHOULD name the concrete
-`<service>_*` tools the LLM is expected to call — prompts orchestrate this
-service's own tools by name.
+bare tools the LLM is expected to call — prompts orchestrate this service's own
+tools by name (`search`, `list_messages`, …).
 
 ### Resource URI + name
-**URI scheme:** `<service>://<domain>/<noun>` (kebab segments) — the service's
-OWN scheme. NEVER `chitty://` and NEVER `chittycanon://`.
+**Resource name:** bare `<noun>` (`phone_numbers`, not `quo_phone_numbers`) —
+same bare rule as tools/prompts.
+
+**URI scheme:** `<service>://<domain>/<noun>` (kebab segments). Here the
+`<service>://` *scheme* IS the namespace mechanism for resources (the analog of
+the aggregator's `<service>/` tool prefix), so it names the service exactly
+once — that is correct, not redundant. NEVER `chitty://`, NEVER `chittycanon://`.
 
 | Scheme | Owner | Meaning |
 |--------|-------|---------|
@@ -108,8 +117,8 @@ An MCP resource URI is a transport handle for live data, NOT a canonical graph
 identifier — conflating them with `chittycanon://` is a violation.
 Examples: `quo://phone-numbers`, `quo://config/routing`, `imsg://sync/state`.
 
-- **Resource name** (first arg): `<service>_<noun>` snake_case
-  (`quo_phone_numbers`), mirroring tool naming.
+- **Resource name** (first arg): bare `<noun>` snake_case (`phone_numbers`,
+  NOT `quo_phone_numbers`), mirroring the bare tool/prompt rule.
 - **MIME type:** explicit, always. `application/json` default; `text/markdown`
   for rendered docs; `text/plain` for logs.
 
@@ -159,14 +168,14 @@ const _e = (m: string) => ({
 
 function register<Name>Tools(server: McpServer, env: Env) {
   server.tool(
-    "<service>_<verb>",
+    "<verb>",                         // BARE — no service prefix (§3)
     "<one-line description>",
     { /* zod schema */ },
     async (input) => {
       try {
         const out = await <existingFunction>(env, input);
         return _t(out);
-      } catch (e) { return _e(`<service>_<verb> failed: ${(e as Error).message}`); }
+      } catch (e) { return _e(`<verb> failed: ${(e as Error).message}`); }
     },
   );
   // …more server.tool() calls
@@ -222,11 +231,11 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
 export function register<Name>Prompts(server: McpServer) {
   server.registerPrompt(
-    "<service>_<verb>",
+    "<verb>",                         // BARE — no service prefix (§3.5)
     { title: "<human label>", description: "<what it does + which tools it orchestrates>",
       argsSchema: { /* zod validators */ } },
     (args) => ({ messages: [{ role: "user", content: { type: "text", text:
-      [ "<task>", "", "Use `<service>_<tool>` to …" ].join("\n") } }] }),
+      [ "<task>", "", "Use `<tool>` to …" ].join("\n") } }] }),
   );
 }
 
@@ -238,7 +247,7 @@ export function register<Name>Resources(
   server: McpServer, env: Env, getCredential: (n: string) => Promise<string>,
 ) {
   server.registerResource(
-    "<service>_<noun>", "<service>://<domain>/<noun>",
+    "<noun>", "<service>://<domain>/<noun>",   // bare name; service lives in the URI scheme
     { title: "<label>", description: "<live data this serves>", mimeType: "application/json" },
     async (uri) => {
       const data = await /* real REST client / Neon query / env config */;
