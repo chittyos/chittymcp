@@ -14,13 +14,41 @@
 #                                              #   (use when the canonical domain is CF-Access-gated)
 #   MCP_BEARER=xxx scripts/verify-mcp.sh ...   # send Authorization: Bearer (aggregator path)
 #   scripts/verify-mcp.sh <service> --read     # also resources/read every resource (proves live data)
+#   scripts/verify-mcp.sh --all                # sweep every federated service (live list from the aggregator)
+#                                              #   canonical first, --origin fallback; summary table
 #
 # Exit codes: 0 = initialize + tools/list succeeded; 1 = usage; 2 = endpoint unreachable/unauthorized.
 set -euo pipefail
 
 ARG="${1:-}"
-[ -z "$ARG" ] && { echo "usage: $0 <service|url> [--origin] [--read]"; exit 1; }
+[ -z "$ARG" ] && { echo "usage: $0 <service|url|--all> [--origin] [--read]"; exit 1; }
 shift || true
+
+# ── --all: fleet sweep ───────────────────────────────────────────────
+# Pull the live federated-service list from the aggregator, verify each
+# (canonical domain, then chittyagent-<svc>.ccorp.workers.dev fallback),
+# and print a prompts/resources presence table. Self-invokes per service.
+if [ "$ARG" = "--all" ]; then
+  AGG="${MCP_AGG:-https://mcp.chitty.cc}"
+  SVCS="$(curl -fsS --max-time 20 "$AGG/v0.1/servers" 2>/dev/null | python3 -c 'import sys,json;print("\n".join(s["id"] for s in json.load(sys.stdin).get("servers",[])))')"
+  [ -z "$SVCS" ] && { echo "could not fetch service list from $AGG/v0.1/servers"; exit 2; }
+  printf "%-14s %-7s %-12s %-12s %s\n" SERVICE tools prompts resources via
+  while IFS= read -r s; do
+    [ -z "$s" ] && continue
+    out="$("$0" "$s" 2>/dev/null || true)";        via=canonical
+    if ! printf '%s' "$out" | grep -q "── ok ──"; then
+      out="$("$0" "$s" --origin 2>/dev/null || true)"; via=origin
+    fi
+    if ! printf '%s' "$out" | grep -q "── ok ──"; then
+      printf "%-14s %-7s %-12s %-12s %s\n" "$s" "-" "-" "-" "unreachable"; continue
+    fi
+    t=$(printf '%s' "$out" | grep 'tools/list:'     | grep -oE '[0-9]+' | head -1)
+    p=$(printf '%s' "$out" | grep 'prompts/list:'   | grep -oE '[0-9]+|unsupported' | head -1)
+    r=$(printf '%s' "$out" | grep 'resources/list:' | grep -oE '[0-9]+|unsupported' | head -1)
+    printf "%-14s %-7s %-12s %-12s %s\n" "$s" "${t:-?}" "${p:-?}" "${r:-?}" "$via"
+  done <<< "$SVCS"
+  exit 0
+fi
 
 ORIGIN=0; READ=0
 for f in "$@"; do
