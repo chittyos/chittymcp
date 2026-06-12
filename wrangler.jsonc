@@ -52,6 +52,7 @@
     { "binding": "SVC_FINANCE",      "service": "chittyagent-finance" },
     { "binding": "SVC_SANDBOX",      "service": "chittyagent-sandbox" },
     { "binding": "SVC_BLUEBUBBLES", "service": "chittyagent-bluebubbles" },
-    { "binding": "SVC_TWILIO", "service": "chittyagent-twilio" }
+    { "binding": "SVC_TWILIO", "service": "chittyagent-twilio" },
+    { "binding": "SVC_BINDINGS",        "service": "chittyagent-bindings" }
   ]
 }
