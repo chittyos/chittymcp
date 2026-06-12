@@ -283,6 +283,18 @@ clients SHOULD prefer `canonical`.
   deployed endpoint as evidence the wrap landed. When the PR adds prompts or
   resources, it MUST also include `prompts/list` and `resources/list` output
   from the deployed endpoint — every resource proven to return live data.
+- Generate that evidence with **`scripts/verify-mcp.sh`** — it runs the full
+  `initialize → tools/list → prompts/list → resources/list` handshake (and
+  `--read` proves every resource returns live data):
+  ```bash
+  scripts/verify-mcp.sh <service> --read          # canonical <name>.chitty.cc
+  scripts/verify-mcp.sh <service> --origin --read  # if the canonical domain is Access-gated
+  MCP_BEARER=$KEY scripts/verify-mcp.sh mcp.chitty.cc/<service>/mcp  # aggregated path
+  ```
+- **Verification ≠ persistence.** Deploying an unmerged branch to production to
+  capture this evidence is transient — the next deploy of that worker from
+  `main` reverts it. The prompts/resources are durable ONLY once the PR merges.
+  Treat the PR as the source of truth, not the live-but-unmerged deployment.
 
 ## 7. Step-by-step (the procedure)
 
