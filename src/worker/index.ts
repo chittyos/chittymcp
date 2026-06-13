@@ -469,7 +469,7 @@ async function requireBearerTokenAsync(request: Request, env: Env): Promise<Resp
   const wwwAuth =
     'Bearer realm="chittymcp", error="invalid_token", ' +
     'error_description="Missing or invalid access token", ' +
-    'resource_metadata="https://mcp.chitty.cc/.well-known/oauth-protected-resource"';
+    'resource_metadata="https://mcp.chitty.cc/.well-known/oauth-protected-resource/mcp"';
   return new Response(
     JSON.stringify({ jsonrpc: "2.0", id: null, error: { code: -32001, message: "unauthorized" } }),
     {
@@ -506,7 +506,7 @@ function requireBearerToken(request: Request, env: Env): Response | null {
     const wwwAuth =
       'Bearer realm="chittymcp", error="invalid_token", ' +
       'error_description="Missing or invalid access token", ' +
-      'resource_metadata="https://mcp.chitty.cc/.well-known/oauth-protected-resource"';
+      'resource_metadata="https://mcp.chitty.cc/.well-known/oauth-protected-resource/mcp"';
     return new Response(
       JSON.stringify({
         jsonrpc: "2.0",
@@ -1258,9 +1258,17 @@ export default {
     const TEAM = "https://chittycorp.cloudflareaccess.com";
     const SELF = "https://mcp.chitty.cc";
 
-    if (request.method === "GET" && path === "/.well-known/oauth-protected-resource") {
+    // RFC 9728 protected-resource metadata. Serve both the root path and the
+    // path-specific variant (/.well-known/oauth-protected-resource/mcp) that
+    // MCP 2025-06 clients (Claude.ai, ChatGPT) probe for resource <SELF>/mcp.
+    if (
+      request.method === "GET" &&
+      (path === "/.well-known/oauth-protected-resource" ||
+        path === "/.well-known/oauth-protected-resource/mcp")
+    ) {
+      const resource = path.endsWith("/mcp") ? `${SELF}/mcp` : SELF;
       return Response.json({
-        resource: SELF,
+        resource,
         authorization_servers: [SELF],
         bearer_methods_supported: ["header"],
         resource_documentation: "https://github.com/CHITTYOS/chittymcp/blob/main/docs/MCP-SOP.md",
