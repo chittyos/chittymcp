@@ -1280,31 +1280,56 @@ export default {
     const TEAM = "https://chittycorp.cloudflareaccess.com";
     const SELF = "https://mcp.chitty.cc";
 
-    // RFC 9728 protected-resource metadata. Serve both the root path and the
-    // path-specific variant (/.well-known/oauth-protected-resource/mcp) that
-    // MCP 2025-06 clients (Claude.ai, ChatGPT) probe for resource <SELF>/mcp.
+    // RFC 9728 §3.1: clients derive the protected-resource metadata URL by
+    // inserting the resource's PATH into the well-known prefix. For an MCP
+    // server advertised as https://mcp.chitty.cc/mcp, Claude.ai fetches
+    // /.well-known/oauth-protected-resource/mcp — NOT the bare root. Serve the
+    // metadata for the root prefix AND any path suffix so path-scoped discovery
+    // resolves (200) instead of 404.
+    //
+    // Authorization server: this host fronts a Cloudflare Access `mcp_portal`
+    // app, which shadows the worker's OAuth endpoints at the edge and routes
+    // the OAuth handshake to the CF Access team domain (verified live: root
+    // AS-metadata issuer = chittycorp.cloudflareaccess.com; DCR to the team
+    // domain returns 201). Advertising SELF as the AS would send clients to
+    // mcp.chitty.cc/.well-known/oauth-authorization-server, whose edge-served
+    // issuer is the team domain — an RFC 8414 §3.3 issuer mismatch that breaks
+    // the connector. So advertise the team domain as the authorization server.
+    // (On hosts WITHOUT mcp_portal, e.g. mcp.ch1tty.com, the worker serves its
+    // own OAuth endpoints and SELF is correct there — this host differs.)
     if (
       request.method === "GET" &&
       (path === "/.well-known/oauth-protected-resource" ||
-        path === "/.well-known/oauth-protected-resource/mcp")
+        path.startsWith("/.well-known/oauth-protected-resource/"))
     ) {
-      const resource = path.endsWith("/mcp") ? `${SELF}/mcp` : SELF;
+      // RFC 9728 §3.3: echo the full requested resource identifier so the
+      // client's resource-match check passes (root → SELF; /mcp → SELF/mcp).
+      const suffix = path.slice("/.well-known/oauth-protected-resource".length);
+      const resource = suffix ? `${SELF}${suffix}` : SELF;
       return Response.json({
         resource,
-        authorization_servers: [SELF],
+        authorization_servers: [TEAM],
         bearer_methods_supported: ["header"],
         resource_documentation: "https://github.com/CHITTYOS/chittymcp/blob/main/docs/MCP-SOP.md",
       }, { headers: corsHeaders() });
     }
 
-    if (request.method === "GET" && path === "/.well-known/oauth-authorization-server") {
-      // Spec-compliant AS metadata advertising worker-hosted endpoints.
+    if (
+      request.method === "GET" &&
+      (path === "/.well-known/oauth-authorization-server" ||
+        path.startsWith("/.well-known/oauth-authorization-server/"))
+    ) {
+      // Authorization server metadata. On this host the edge (mcp_portal)
+      // shadows root and clients use the team-domain AS, so this worker-served
+      // document is not on Claude.ai's critical path; it is kept path-tolerant
+      // for spec completeness and advertises the CF Access team-domain
+      // endpoints to stay consistent with the protected-resource AS above.
       return Response.json({
-        issuer: SELF,
-        authorization_endpoint: `${SELF}/authorize`,
-        token_endpoint: `${SELF}/token`,
-        registration_endpoint: `${SELF}/register`,
-        revocation_endpoint: `${SELF}/token`,
+        issuer: TEAM,
+        authorization_endpoint: `${TEAM}/cdn-cgi/access/oauth/authorization`,
+        token_endpoint: `${TEAM}/cdn-cgi/access/oauth/token`,
+        registration_endpoint: `${TEAM}/cdn-cgi/access/oauth/registration`,
+        revocation_endpoint: `${TEAM}/cdn-cgi/access/oauth/revoke`,
         response_types_supported: ["code"],
         response_modes_supported: ["query"],
         grant_types_supported: ["authorization_code", "refresh_token"],
