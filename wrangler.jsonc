@@ -1,42 +1,58 @@
-// chittymcp — Cloudflare Workers configuration
 {
+  "$schema": "node_modules/wrangler/config-schema.json",
   "name": "chittymcp",
-  "main": "mcp-unified-consolidated/unified-server.js",
-  "compatibility_date": "2026-03-16",
-  "workers_dev": false,
-  "account_id": "bbf9fcd845e78035b7a135c481e88541",
-  // mcp.chitty.cc/* route removed — owned by chittyconnect (canonical MCP gateway)
-  "routes": [],
-  "kv_namespaces": [
-    {
-      "binding": "PLATFORM_KV",
-      "id": "d52d89c1eebd402b95719161d311e7df"
-    },
-    {
-      "binding": "PLATFORM_CACHE",
-      "id": "d66c1e709c72456fa21aaa0d02f2db5e"
-    }
+  "main": "src/worker/index.ts",
+  "compatibility_date": "2026-04-27",
+  "compatibility_flags": ["nodejs_compat"],
+  "account_id": "0bc21e3a5a9de1a4cc843be9c3e98121",
+  "observability": { "enabled": true },
+  "tail_consumers": [{ "service": "chittytrack" }],
+
+  "routes": [
+    { "pattern": "mcp.chitty.cc/*", "zone_name": "chitty.cc" }
   ],
-  "vars": {
-    "CHITTY_ENV": "production",
-    "CHITTYID_SERVICE": "https://id.chitty.cc",
-    "PORTAL_DOMAIN": "portal.chitty.cc",
-    "GATEWAY_SERVICE": "https://gateway.chitty.cc",
-    "REGISTRY_SERVICE": "https://registry.chitty.cc",
-    "CLOUDFLARE_ACCOUNT_ID": "bbf9fcd845e78035b7a135c481e88541"
-  },
-  "limits": {
-    "cpu_ms": 100
-  },
-  "build": {
-    "command": "npm install"
-  },
-  "observability": {
-    "enabled": true
-  },
-  "tail_consumers": [
-    {
-      "service": "chittytrack"
-    }
+
+  // Service bindings — every chittyagent-* worker confirmed live at
+  // <name>.agent.chitty.cc/mcp (HTTP 302 = Cloudflare Access challenge = route exists).
+  // Aggregated namespace at mcp.chitty.cc:
+  //   mcp.chitty.cc/mcp              → tools/list, tools/call (all services, namespaced)
+  //   mcp.chitty.cc/<name>/mcp       → proxied directly to chittyagent-<name>
+  //   mcp.chitty.cc/v0.1/servers     → MCP-spec discovery
+  //
+  // Source of truth for membership: docs/agent-registry-triage.json (Bucket A).
+  // Services not yet deployed (Bucket C) are intentionally NOT bound — re-add when live.
+  "services": [
+    { "binding": "SVC_AI",           "service": "chittyagent-ai" },
+    { "binding": "SVC_ALCHEMIST",    "service": "chittyagent-alchemist" },
+    { "binding": "SVC_AUTH",         "service": "chittyagent-auth" },
+    { "binding": "SVC_AUTOASSIST",   "service": "chittyagent-autoassist" },
+    { "binding": "SVC_CANON",        "service": "chittyagent-canon" },
+    { "binding": "SVC_CH1TTY",       "service": "chittyagent-ch1tty" },
+    { "binding": "SVC_CHATGPT",      "service": "chittyagent-chatgpt" },
+    { "binding": "SVC_CLEANER",      "service": "chittyagent-cleaner" },
+    { "binding": "SVC_DISPATCH",     "service": "chittyagent-dispatch" },
+    { "binding": "SVC_DISPUTE",      "service": "chittyagent-dispute" },
+    { "binding": "SVC_EVIDENCE",     "service": "chittyagent-evidence" },
+    { "binding": "SVC_GAM",          "service": "chittyagent-gam" },
+    { "binding": "SVC_HELPER",       "service": "chittyagent-helper" },
+    { "binding": "SVC_IMESSAGE",     "service": "chittyagent-imessage" },
+    { "binding": "SVC_MARKET",       "service": "chittyagent-market" },
+    { "binding": "SVC_NEON",         "service": "chittyagent-neon" },
+    { "binding": "SVC_NOTES",        "service": "chittyagent-notes" },
+    { "binding": "SVC_NOTION",       "service": "chittyagent-notion" },
+    { "binding": "SVC_ORCHESTRATOR", "service": "chittyagent-orchestrator" },
+    { "binding": "SVC_QUO",          "service": "chittyagent-quo" },
+    { "binding": "SVC_RESOLVE",      "service": "chittyagent-resolve" },
+    { "binding": "SVC_SCRAPE",       "service": "chittyagent-scrape" },
+    { "binding": "SVC_SHIP",         "service": "chittyagent-ship" },
+    { "binding": "SVC_STORAGE",      "service": "chittyagent-storage" },
+    { "binding": "SVC_TASKS",        "service": "chittyagent-tasks" },
+    { "binding": "SVC_VIEWPORT",     "service": "chittyagent-viewport" },
+    { "binding": "SVC_CLOUDFLARE",   "service": "chittyagent-cloudflare" },
+    { "binding": "SVC_FINANCE",      "service": "chittyagent-finance" },
+    { "binding": "SVC_SANDBOX",      "service": "chittyagent-sandbox" },
+    { "binding": "SVC_BLUEBUBBLES", "service": "chittyagent-bluebubbles" },
+    { "binding": "SVC_TWILIO", "service": "chittyagent-twilio" },
+    { "binding": "SVC_BINDINGS",        "service": "chittyagent-bindings" }
   ]
 }

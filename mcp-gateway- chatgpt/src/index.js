@@ -31,10 +31,30 @@ app.use('/*', cors({
 // Logging middleware
 app.use('/*', logger());
 
+// Deprecation headers — this gateway is being retired in favor of the canonical
+// mcp.chitty.cc aggregator. ChatGPT MCP clients should re-register against
+// https://mcp.chitty.cc/ (same OAuth flow, same scopes, same tools, unified
+// audit). Sunset window: 2026-08-15.
+app.use('/*', async (c, next) => {
+  c.header('Deprecation', 'true');
+  c.header('Sunset', 'Sat, 15 Aug 2026 00:00:00 GMT');
+  c.header('Link', '<https://mcp.chitty.cc/mcp>; rel="successor-version", <https://mcp.chitty.cc/sse>; rel="alternate"');
+  await next();
+});
+
 /**
  * Health check endpoint
  * GET /health
  */
+// Single source of truth for service identity exposed across discovery
+// endpoints (/health, /, /.well-known/mcp.json, /mcp/manifest).
+export const SERVICE_IDENTITY = {
+  name: 'chittymcp-gateway',
+  version: '1.1.0',
+  protocol: 'MCP 2024-11-05',
+  transport: 'HTTP/JSON-RPC 2.0',
+};
+
 app.get('/health', (c) => {
   return c.json({
     status: 'ok',
@@ -62,7 +82,8 @@ app.get('/.well-known/mcp.json', (c) => {
     grant_types_supported: ['authorization_code', 'refresh_token'],
     jwks_uri: 'https://auth.chitty.cc/v1/oauth/jwks',
     service: {
-      name: 'ChatGPT MCP Gateway',
+      name: SERVICE_IDENTITY.name,
+      version: SERVICE_IDENTITY.version,
       manifest: 'https://mcp.chitty.cc/mcp/manifest',
       sse: 'https://mcp.chitty.cc/mcp/sse'
     }
@@ -77,8 +98,8 @@ app.get('/mcp/manifest', (c) => {
   c.header('Cache-Control', 'public, max-age=300');
   return c.json({
     schema_version: '2024-11-05',
-    name: 'chittyos-unified',
-    version: '1.0.0',
+    name: SERVICE_IDENTITY.name,
+    version: SERVICE_IDENTITY.version,
     description: 'Unified MCP Gateway for ChittyOS - Consolidates all legal technology tools and services',
     capabilities: {
       tools: true,

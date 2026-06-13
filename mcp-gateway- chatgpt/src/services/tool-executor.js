@@ -320,7 +320,9 @@ async function chronicleTimeline(sql, args) {
     entityId,
     timeline: results,
     count: results.length,
-    timeframe: { startDate, endDate }
+    timeframe: { startDate, endDate },
+    services: servicesOrNull,
+    groupBy: groupBy || null
   };
 }
 

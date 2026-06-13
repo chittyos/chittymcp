@@ -1,0 +1,62 @@
+{
+  "$schema": "https://registry.chitty.cc/schemas/mcp-server-triage-v1.json",
+  "generated_at": "2026-05-27",
+  "generated_by": "chittymcp chore/mcp-sop-v1 session",
+  "supersedes": "docs/agent-registry-triage.json@2026-05-26",
+  "canonical_endpoint_pattern": "https://<name>.chitty.cc/mcp",
+  "legacy_endpoint_pattern": "https://<name>.agent.chitty.cc/mcp",
+  "aggregator_endpoint_pattern": "https://mcp.chitty.cc/<name>/mcp",
+  "sop": "docs/MCP-SOP.md",
+  "transport_profile": {
+    "transport": "streamable-http",
+    "auth": "cloudflare-access-bypass + worker-level + chittymcp Bearer MCP_API_KEY"
+  },
+  "buckets": {
+    "A_mcp_layer_live_on_main": {
+      "description": "Worker is live, McpAgent layer merged to chittyentity main, SVC_* binding in chittymcp/wrangler.jsonc and SERVICE_MAP. Aggregator deployed with 38 service bindings. 153 tools live via mcp.chitty.cc/mcp (tools/list). Last 2 added: cloudflare + finance via chittyentity PR #292 + chittymcp PR #85.",
+      "services": ["alchemist", "auth", "autoassist", "availability", "bluebubbles", "bridge-consent", "buyflow", "canon", "chatgpt", "ch1tty", "cleaner", "cloudflare", "dispatch", "dispute", "evidence", "finance", "gam", "helper", "human-escalator", "imessage", "lead-score", "lease-execute", "lease-explain", "market", "neon", "notes", "notion", "orchestrator", "quo", "quote", "resolve", "sandbox", "scrape", "ship", "storage", "tasks", "twilio", "viewport"]
+    },
+    "C_not_an_mcp_candidate": {
+      "description": "React/UI worker (app.tsx, client.tsx) — not an MCP server. Excluded from the wrap loop.",
+      "services": ["ui"]
+    }
+  },
+  "endpoint_migration": {
+    "from": "<name>.agent.chitty.cc/mcp",
+    "to": "<name>.chitty.cc/mcp",
+    "status": "in-progress",
+    "tracking": "chittyentity commit d2cc353 (feat: canonicalize {name}.chitty.cc per user override)"
+  },
+  "policy_filters": {
+    "_note": "IMPLEMENTED as category-based aggregate sub-views in src/worker/index.ts (VIEW_CATEGORIES). The prior domain:/surface:/audience: tag filters were doc-only and never enforced. Each SERVICE_MAP entry carries a `category`; POST /{view}/mcp filters to that category and reuses the full aggregate pipeline.",
+    "chittymcp":  "* (no filter — all bound services)",
+    "chittycpa":  "category:finance",
+    "chittymsg":  "category:communication",
+    "ch1tty":     "(separate OAuth gateway, not a chittymcp sub-view)"
+  },
+  "aggregate_subviews": {
+    "endpoint_pattern": "https://mcp.chitty.cc/{view}/mcp",
+    "views": {
+      "cpa": { "category": "finance", "services": ["finance"], "note": "ChittyCPA — auto-includes future category:finance agents (stripe/quickbooks/plaid/mercury-worker)" },
+      "msg": { "category": "communication", "services": ["autoassist", "bluebubbles", "dispute", "imessage", "notes", "quo", "twilio"] }
+    }
+  },
+  "unmerged_branches_blocking_main": [],
+  "next_actions": [
+    "Naming cleanup: shell-worker tool names contain hyphens (lead-score_status, lease-execute_status, bridge-consent_status, human-escalator_status, lease-explain_status). Mechanical sed-rename to snake_case per SOP §3.",
+    "Implement real tool bodies beyond <service>_status for the 6 shell workers (availability, buyflow, lead-score, lease-execute, lease-explain, quote) — each needs domain-specific tools wired to its Hyperdrive backend.",
+    "Aggregator worker (src/worker/index.ts): remove the dead MCP_REGISTRY KV path (PR #63) since static SERVICE_MAP now fully covers 38 services. ~150 LOC simplification.",
+    "Custom domain limit (100 per chitty.cc zone) still affects twilio, bridge-consent, human-escalator, finance, cloudflare (workers.dev only). Consider zone split or domain pruning."
+  ],
+  "session_log_2026_05_27": {
+    "chittymcp_prs_merged": [77, 78, 79, 80, 81, 83, 84, 85],
+    "chittyentity_prs_merged": [271, 272, 273, 274, 275, 276, 278, 279, 280, 281, 282, 283, 284, 285, 286, 287, 288, 289, 290, 292],
+    "services_added_to_aggregator": ["tasks", "viewport", "sandbox", "availability", "bluebubbles", "bridge-consent", "buyflow", "human-escalator", "lead-score", "lease-execute", "lease-explain", "quote", "twilio", "cloudflare", "finance"],
+    "kv_namespaces_minted": 10,
+    "cf_access_apps_deleted": 9,
+    "cf_access_apps_created": 3,
+    "new_canonical_artifacts": ["docs/MCP-SOP.md", "scripts/scaffold-mcp.ts"],
+    "coverage_change": "9 → 38 of 39 services (23% → 97%; remaining 1 is ui which is not an MCP candidate)",
+    "live_tool_count": 153
+  }
+}
