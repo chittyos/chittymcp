@@ -28,9 +28,18 @@
     "tracking": "chittyentity commit d2cc353 (feat: canonicalize {name}.chitty.cc per user override)"
   },
   "policy_filters": {
-    "chittymcp":  "surface:all",
-    "chittymsg":  "domain:messaging",
-    "ch1tty":     "audience:human AND auth:oauth-ok"
+    "_note": "IMPLEMENTED as category-based aggregate sub-views in src/worker/index.ts (VIEW_CATEGORIES). The prior domain:/surface:/audience: tag filters were doc-only and never enforced. Each SERVICE_MAP entry carries a `category`; POST /{view}/mcp filters to that category and reuses the full aggregate pipeline.",
+    "chittymcp":  "* (no filter — all bound services)",
+    "chittycpa":  "category:finance",
+    "chittymsg":  "category:communication",
+    "ch1tty":     "(separate OAuth gateway, not a chittymcp sub-view)"
+  },
+  "aggregate_subviews": {
+    "endpoint_pattern": "https://mcp.chitty.cc/{view}/mcp",
+    "views": {
+      "cpa": { "category": "finance", "services": ["finance"], "note": "ChittyCPA — auto-includes future category:finance agents (stripe/quickbooks/plaid/mercury-worker)" },
+      "msg": { "category": "communication", "services": ["autoassist", "bluebubbles", "dispute", "imessage", "notes", "quo", "twilio"] }
+    }
   },
   "unmerged_branches_blocking_main": [],
   "next_actions": [
