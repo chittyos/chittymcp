@@ -104,11 +104,9 @@ async function executeHttpTool(tool, args, env) {
     let response;
 
     if (binding) {
-      // Use service binding for same-zone Workers (avoids route-to-route fetch issue).
-      // The Workers Request constructor requires an absolute URL; for service-binding
-      // calls we keep the original endpoint URL so the bound Worker sees the canonical
-      // path and host the caller intended (binding.fetch ignores network resolution).
-      response = await binding.fetch(new Request(tool.endpoint, {
+      // Use service binding for same-zone Workers (avoids route-to-route fetch issue)
+      const url = new URL(tool.endpoint);
+      response = await binding.fetch(new Request(url.pathname + url.search, {
         method: 'POST',
         headers,
         body: JSON.stringify(args)
@@ -270,48 +268,49 @@ async function chronicleSearch(sql, args) {
  * Get timeline for entity
  */
 async function chronicleTimeline(sql, args) {
-  const { entityId, startDate, endDate, services, groupBy } = args;
+  const { entityId, startDate, endDate, services } = args;
 
   if (!entityId) {
     throw new Error('entityId is required');
   }
 
-  if (groupBy && !['hour', 'day', 'week', 'month'].includes(groupBy)) {
-    throw new Error(`Invalid groupBy: ${groupBy}. Must be one of: hour, day, week, month`);
-  }
-
-  // Use NULL coalescing to apply each filter independently — preserves all 8
-  // combinations of (services, startDate, endDate) instead of dropping the
-  // services filter when only one date bound is provided.
-  const startDateOrNull = startDate || null;
-  const endDateOrNull = endDate || null;
-  const servicesOrNull = Array.isArray(services) && services.length > 0 ? services : null;
-
   let results;
-  if (groupBy) {
-    // Bucket events by time interval. The bucket label is derived from
-    // date_trunc(groupBy, created_at). Returns one row per bucket with
-    // event count and a summary of services involved.
+
+  if (services && services.length > 0 && startDate && endDate) {
     results = await sql`
-      SELECT
-        date_trunc(${groupBy}, created_at) AS bucket,
-        COUNT(*)::int AS event_count,
-        ARRAY_AGG(DISTINCT service) AS services
-      FROM chronicle_events
+      SELECT * FROM chronicle_events
       WHERE entity_id = ${entityId}
-        AND (${startDateOrNull}::timestamptz IS NULL OR created_at >= ${startDateOrNull}::timestamptz)
-        AND (${endDateOrNull}::timestamptz IS NULL OR created_at <= ${endDateOrNull}::timestamptz)
-        AND (${servicesOrNull}::text[] IS NULL OR service = ANY(${servicesOrNull}::text[]))
-      GROUP BY bucket
-      ORDER BY bucket ASC
+        AND created_at >= ${startDate}
+        AND created_at <= ${endDate}
+        AND service = ANY(${services})
+      ORDER BY created_at ASC
+    `;
+  } else if (startDate && endDate) {
+    results = await sql`
+      SELECT * FROM chronicle_events
+      WHERE entity_id = ${entityId}
+        AND created_at >= ${startDate}
+        AND created_at <= ${endDate}
+      ORDER BY created_at ASC
+    `;
+  } else if (startDate) {
+    results = await sql`
+      SELECT * FROM chronicle_events
+      WHERE entity_id = ${entityId}
+        AND created_at >= ${startDate}
+      ORDER BY created_at ASC
+    `;
+  } else if (endDate) {
+    results = await sql`
+      SELECT * FROM chronicle_events
+      WHERE entity_id = ${entityId}
+        AND created_at <= ${endDate}
+      ORDER BY created_at ASC
     `;
   } else {
     results = await sql`
       SELECT * FROM chronicle_events
       WHERE entity_id = ${entityId}
-        AND (${startDateOrNull}::timestamptz IS NULL OR created_at >= ${startDateOrNull}::timestamptz)
-        AND (${endDateOrNull}::timestamptz IS NULL OR created_at <= ${endDateOrNull}::timestamptz)
-        AND (${servicesOrNull}::text[] IS NULL OR service = ANY(${servicesOrNull}::text[]))
       ORDER BY created_at ASC
     `;
   }
