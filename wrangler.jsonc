@@ -30,6 +30,7 @@
     { "binding": "SVC_CH1TTY",       "service": "chittyagent-ch1tty" },
     { "binding": "SVC_CHATGPT",      "service": "chittyagent-chatgpt" },
     { "binding": "SVC_CLEANER",      "service": "chittyagent-cleaner" },
+    { "binding": "SVC_CONTEXTUAL",   "service": "chittyagent-contextual" },
     { "binding": "SVC_DISPATCH",     "service": "chittyagent-dispatch" },
     { "binding": "SVC_DISPUTE",      "service": "chittyagent-dispute" },
     { "binding": "SVC_EVIDENCE",     "service": "chittyagent-evidence" },

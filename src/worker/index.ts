@@ -20,6 +20,7 @@ interface Env {
   SVC_CH1TTY: Fetcher;
   SVC_CHATGPT: Fetcher;
   SVC_CLEANER: Fetcher;
+  SVC_CONTEXTUAL: Fetcher;
   SVC_CLOUDFLARE: Fetcher;
   SVC_DISPATCH: Fetcher;
   SVC_DISPUTE: Fetcher;
@@ -110,6 +111,7 @@ const SERVICE_MAP: Record<string, ServiceEntry> = {
   ch1tty:           { binding: "SVC_CH1TTY",           label: "Ch1tty Gateway" },
   chatgpt:          { binding: "SVC_CHATGPT",          label: "ChatGPT Bridge" },
   cleaner:          { binding: "SVC_CLEANER",          label: "Cleaner" },
+  contextual:       { binding: "SVC_CONTEXTUAL",       label: "Contextual (cross-channel conversations)" },
   cloudflare:       { binding: "SVC_CLOUDFLARE",       label: "Cloudflare ops" },
   dispatch:         { binding: "SVC_DISPATCH",         label: "Dispatch" },
   dispute:          { binding: "SVC_DISPUTE",          label: "Dispute Management" },
