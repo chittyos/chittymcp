@@ -81,6 +81,12 @@ type BindingKey = keyof Env;
 interface ServiceEntry {
   binding: BindingKey;
   label: string;
+  // Membership category for aggregate sub-views (e.g. /cpa/mcp = finance,
+  // /msg/mcp = communication). Reuses the `category` vocabulary from
+  // ch1tty servers.json (finance, communication, platform, …) — NOT the
+  // CHARTER's `domain:` tag, which was only ever documented, never enforced.
+  // Defaults to "platform" when a dynamic entry omits it.
+  category: string;
 }
 
 interface DynamicServiceEntry {
@@ -88,6 +94,7 @@ interface DynamicServiceEntry {
   sub: string;
   binding: BindingKey;
   label: string;
+  category?: string;
   enabled?: boolean;
   posture?: string;
   trust_score?: number;
@@ -181,7 +188,11 @@ async function loadActiveServices(env: Env): Promise<Record<string, ServiceEntry
     for (const entry of parsed) {
       if (!entry?.id || !entry?.sub || !entry?.binding || !entry?.label) continue;
       if (!isEligibleByPosture(entry)) continue;
-      active[entry.sub] = { binding: entry.binding, label: entry.label };
+      active[entry.sub] = {
+        binding: entry.binding,
+        label: entry.label,
+        category: entry.category || SERVICE_MAP[entry.sub]?.category || "platform",
+      };
     }
     return Object.keys(active).length > 0 ? active : fallback;
   } catch (err) {
@@ -471,7 +482,7 @@ async function requireBearerTokenAsync(request: Request, env: Env): Promise<Resp
   const wwwAuth =
     'Bearer realm="chittymcp", error="invalid_token", ' +
     'error_description="Missing or invalid access token", ' +
-    'resource_metadata="https://mcp.chitty.cc/.well-known/oauth-protected-resource"';
+    'resource_metadata="https://mcp.chitty.cc/.well-known/oauth-protected-resource/mcp"';
   return new Response(
     JSON.stringify({ jsonrpc: "2.0", id: null, error: { code: -32001, message: "unauthorized" } }),
     {
@@ -508,7 +519,7 @@ function requireBearerToken(request: Request, env: Env): Response | null {
     const wwwAuth =
       'Bearer realm="chittymcp", error="invalid_token", ' +
       'error_description="Missing or invalid access token", ' +
-      'resource_metadata="https://mcp.chitty.cc/.well-known/oauth-protected-resource"';
+      'resource_metadata="https://mcp.chitty.cc/.well-known/oauth-protected-resource/mcp"';
     return new Response(
       JSON.stringify({
         jsonrpc: "2.0",
@@ -1210,7 +1221,7 @@ async function handleAdminBind(request: Request, env: Env): Promise<Response> {
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
-    const path = url.pathname;
+    let path = url.pathname;
 
     // Cheap branches first — these don't need the dynamic service map and
     // shouldn't pay a KV read per request.
@@ -1260,23 +1271,56 @@ export default {
     const TEAM = "https://chittycorp.cloudflareaccess.com";
     const SELF = "https://mcp.chitty.cc";
 
-    if (request.method === "GET" && path === "/.well-known/oauth-protected-resource") {
+    // RFC 9728 §3.1: clients derive the protected-resource metadata URL by
+    // inserting the resource's PATH into the well-known prefix. For an MCP
+    // server advertised as https://mcp.chitty.cc/mcp, Claude.ai fetches
+    // /.well-known/oauth-protected-resource/mcp — NOT the bare root. Serve the
+    // metadata for the root prefix AND any path suffix so path-scoped discovery
+    // resolves (200) instead of 404.
+    //
+    // Authorization server: this host fronts a Cloudflare Access `mcp_portal`
+    // app, which shadows the worker's OAuth endpoints at the edge and routes
+    // the OAuth handshake to the CF Access team domain (verified live: root
+    // AS-metadata issuer = chittycorp.cloudflareaccess.com; DCR to the team
+    // domain returns 201). Advertising SELF as the AS would send clients to
+    // mcp.chitty.cc/.well-known/oauth-authorization-server, whose edge-served
+    // issuer is the team domain — an RFC 8414 §3.3 issuer mismatch that breaks
+    // the connector. So advertise the team domain as the authorization server.
+    // (On hosts WITHOUT mcp_portal, e.g. mcp.ch1tty.com, the worker serves its
+    // own OAuth endpoints and SELF is correct there — this host differs.)
+    if (
+      request.method === "GET" &&
+      (path === "/.well-known/oauth-protected-resource" ||
+        path.startsWith("/.well-known/oauth-protected-resource/"))
+    ) {
+      // RFC 9728 §3.3: echo the full requested resource identifier so the
+      // client's resource-match check passes (root → SELF; /mcp → SELF/mcp).
+      const suffix = path.slice("/.well-known/oauth-protected-resource".length);
+      const resource = suffix ? `${SELF}${suffix}` : SELF;
       return Response.json({
-        resource: SELF,
-        authorization_servers: [SELF],
+        resource,
+        authorization_servers: [TEAM],
         bearer_methods_supported: ["header"],
         resource_documentation: "https://github.com/CHITTYOS/chittymcp/blob/main/docs/MCP-SOP.md",
       }, { headers: corsHeaders() });
     }
 
-    if (request.method === "GET" && path === "/.well-known/oauth-authorization-server") {
-      // Spec-compliant AS metadata advertising worker-hosted endpoints.
+    if (
+      request.method === "GET" &&
+      (path === "/.well-known/oauth-authorization-server" ||
+        path.startsWith("/.well-known/oauth-authorization-server/"))
+    ) {
+      // Authorization server metadata. On this host the edge (mcp_portal)
+      // shadows root and clients use the team-domain AS, so this worker-served
+      // document is not on Claude.ai's critical path; it is kept path-tolerant
+      // for spec completeness and advertises the CF Access team-domain
+      // endpoints to stay consistent with the protected-resource AS above.
       return Response.json({
-        issuer: SELF,
-        authorization_endpoint: `${SELF}/authorize`,
-        token_endpoint: `${SELF}/token`,
-        registration_endpoint: `${SELF}/register`,
-        revocation_endpoint: `${SELF}/token`,
+        issuer: TEAM,
+        authorization_endpoint: `${TEAM}/cdn-cgi/access/oauth/authorization`,
+        token_endpoint: `${TEAM}/cdn-cgi/access/oauth/token`,
+        registration_endpoint: `${TEAM}/cdn-cgi/access/oauth/registration`,
+        revocation_endpoint: `${TEAM}/cdn-cgi/access/oauth/revoke`,
         response_types_supported: ["code"],
         response_modes_supported: ["query"],
         grant_types_supported: ["authorization_code", "refresh_token"],
@@ -1343,7 +1387,25 @@ export default {
     }
 
     // Everything below depends on the active (posture-filtered) service map.
-    const serviceMap = await loadActiveServices(env);
+    let serviceMap = await loadActiveServices(env);
+
+    // Aggregate sub-view rewrite: a POST to /{view}/mcp (cpa, msg, …) narrows
+    // the map to the services whose `category` matches that view, then rewrites
+    // the path to /mcp so the existing aggregate pipeline (initialize,
+    // tools/list, tools/call, prompts, resources) runs unchanged over the
+    // filtered set. View names never collide with service ids (checked below),
+    // so the per-service proxy loop is unaffected. Fails CLOSED: an empty
+    // filtered map yields an aggregate with zero tools rather than the full set.
+    for (const [view, category] of Object.entries(VIEW_CATEGORIES)) {
+      if (serviceMap[view]) continue; // a real service named like a view wins
+      if (path === `/${view}/mcp` || path.startsWith(`/${view}/mcp/`)) {
+        serviceMap = Object.fromEntries(
+          Object.entries(serviceMap).filter(([, s]) => s.category === category),
+        );
+        path = path.slice(`/${view}`.length) || "/mcp";
+        break;
+      }
+    }
 
     // Service index
     if (request.method === "GET" && (path === "/" || path === "")) {

@@ -47,3 +47,6 @@ mcp-diagnostics-*.html
 .backups/
 *.bak
 .tmp-oauth.mjs
+
+# Claude Code session worktrees (local only)
+.claude/worktrees/
