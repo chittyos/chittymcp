@@ -102,39 +102,48 @@ interface DynamicServiceEntry {
 }
 
 const SERVICE_MAP: Record<string, ServiceEntry> = {
-  ai:               { binding: "SVC_AI",               label: "AI Gateway (chittyclaw)" },
-  alchemist:        { binding: "SVC_ALCHEMIST",        label: "Alchemist (telemetry + entity graph)" },
-  auth:             { binding: "SVC_AUTH",             label: "ChittyAuth (identity + tokens)" },
-  autoassist:       { binding: "SVC_AUTOASSIST",       label: "AutoAssist" },
-  bluebubbles:      { binding: "SVC_BLUEBUBBLES",      label: "BlueBubbles bridge" },
-  canon:            { binding: "SVC_CANON",            label: "Canon (governance)" },
-  ch1tty:           { binding: "SVC_CH1TTY",           label: "Ch1tty Gateway" },
-  chatgpt:          { binding: "SVC_CHATGPT",          label: "ChatGPT Bridge" },
-  cleaner:          { binding: "SVC_CLEANER",          label: "Cleaner" },
-  contextual:       { binding: "SVC_CONTEXTUAL",       label: "Contextual (cross-channel conversations)" },
-  cloudflare:       { binding: "SVC_CLOUDFLARE",       label: "Cloudflare ops" },
-  dispatch:         { binding: "SVC_DISPATCH",         label: "Dispatch" },
-  dispute:          { binding: "SVC_DISPUTE",          label: "Dispute Management" },
-  evidence:         { binding: "SVC_EVIDENCE",         label: "Evidence Pipeline" },
-  finance:          { binding: "SVC_FINANCE",          label: "Finance (Mercury + Neon)" },
-  gam:              { binding: "SVC_GAM",              label: "Google Workspace Admin" },
-  helper:           { binding: "SVC_HELPER",           label: "Ecosystem Helper" },
-  imessage:         { binding: "SVC_IMESSAGE",         label: "iMessage ops" },
-  market:           { binding: "SVC_MARKET",           label: "ChittyMarket" },
-  neon:             { binding: "SVC_NEON",             label: "Neon Postgres ops" },
-  notes:            { binding: "SVC_NOTES",            label: "Notes & Knowledge" },
-  notion:           { binding: "SVC_NOTION",           label: "Notion workspace ops" },
-  orchestrator:     { binding: "SVC_ORCHESTRATOR",     label: "Orchestrator" },
-  quo:              { binding: "SVC_QUO",              label: "Quo unified messaging" },
-  resolve:          { binding: "SVC_RESOLVE",          label: "Resolve" },
-  sandbox:          { binding: "SVC_SANDBOX",          label: "Code Mode Sandbox" },
-  scrape:           { binding: "SVC_SCRAPE",           label: "Scrape" },
-  ship:             { binding: "SVC_SHIP",             label: "Ship & Deploy" },
-  storage:          { binding: "SVC_STORAGE",          label: "Document Storage" },
-  tasks:            { binding: "SVC_TASKS",            label: "Tasks Queue" },
-  twilio:           { binding: "SVC_TWILIO",           label: "Twilio bridge" },
-  viewport:         { binding: "SVC_VIEWPORT",         label: "Session Viewport" },
-  ui: { binding: "SVC_UI", label: "Ui (auto-bound)" },
+  ai:               { binding: "SVC_AI",               label: "AI Gateway (chittyclaw)",            category: "platform" },
+  alchemist:        { binding: "SVC_ALCHEMIST",        label: "Alchemist (telemetry + entity graph)", category: "platform" },
+  auth:             { binding: "SVC_AUTH",             label: "ChittyAuth (identity + tokens)",     category: "identity" },
+  autoassist:       { binding: "SVC_AUTOASSIST",       label: "AutoAssist",                         category: "communication" },
+  bluebubbles:      { binding: "SVC_BLUEBUBBLES",      label: "BlueBubbles bridge",                 category: "communication" },
+  canon:            { binding: "SVC_CANON",            label: "Canon (governance)",                 category: "governance" },
+  ch1tty:           { binding: "SVC_CH1TTY",           label: "Ch1tty Gateway",                     category: "platform" },
+  chatgpt:          { binding: "SVC_CHATGPT",          label: "ChatGPT Bridge",                     category: "platform" },
+  cleaner:          { binding: "SVC_CLEANER",          label: "Cleaner",                            category: "devops" },
+  contextual:       { binding: "SVC_CONTEXTUAL",       label: "Contextual (cross-channel conversations)", category: "platform" },
+  cloudflare:       { binding: "SVC_CLOUDFLARE",       label: "Cloudflare ops",                     category: "infra" },
+  dispatch:         { binding: "SVC_DISPATCH",         label: "Dispatch",                           category: "platform" },
+  dispute:          { binding: "SVC_DISPUTE",          label: "Dispute Management",                 category: "communication" },
+  evidence:         { binding: "SVC_EVIDENCE",         label: "Evidence Pipeline",                  category: "legal" },
+  finance:          { binding: "SVC_FINANCE",          label: "Finance (Mercury + Neon)",           category: "finance" },
+  gam:              { binding: "SVC_GAM",              label: "Google Workspace Admin",             category: "infra" },
+  helper:           { binding: "SVC_HELPER",           label: "Ecosystem Helper",                   category: "platform" },
+  imessage:         { binding: "SVC_IMESSAGE",         label: "iMessage ops",                       category: "communication" },
+  market:           { binding: "SVC_MARKET",           label: "ChittyMarket",                       category: "platform" },
+  neon:             { binding: "SVC_NEON",             label: "Neon Postgres ops",                  category: "infra" },
+  notes:            { binding: "SVC_NOTES",            label: "Notes & Knowledge",                  category: "communication" },
+  notion:           { binding: "SVC_NOTION",           label: "Notion workspace ops",               category: "productivity" },
+  orchestrator:     { binding: "SVC_ORCHESTRATOR",     label: "Orchestrator",                       category: "platform" },
+  quo:              { binding: "SVC_QUO",              label: "Quo unified messaging",              category: "communication" },
+  resolve:          { binding: "SVC_RESOLVE",          label: "Resolve",                            category: "devops" },
+  sandbox:          { binding: "SVC_SANDBOX",          label: "Code Mode Sandbox",                  category: "devops" },
+  scrape:           { binding: "SVC_SCRAPE",           label: "Scrape",                             category: "research" },
+  ship:             { binding: "SVC_SHIP",             label: "Ship & Deploy",                      category: "devops" },
+  storage:          { binding: "SVC_STORAGE",          label: "Document Storage",                   category: "infra" },
+  tasks:            { binding: "SVC_TASKS",            label: "Tasks Queue",                        category: "platform" },
+  twilio:           { binding: "SVC_TWILIO",           label: "Twilio bridge",                      category: "communication" },
+  viewport:         { binding: "SVC_VIEWPORT",         label: "Session Viewport",                   category: "platform" },
+  ui:               { binding: "SVC_UI",               label: "Ui (auto-bound)",                    category: "platform" },
+};
+
+// Aggregate sub-views: a POST to /{view}/mcp federates only the services whose
+// `category` matches, exposing a focused MCP surface that reuses the same
+// discovery/forward pipeline as the full /mcp aggregate. New services join a
+// view automatically by declaring the matching category in SERVICE_MAP.
+const VIEW_CATEGORIES: Record<string, string> = {
+  cpa: "finance",        // ChittyCPA — money/finance surface
+  msg: "communication",  // ChittyMsg — messaging/comms surface
 };
 
 const MCP_REGISTRY_KEY = "services:v1";
