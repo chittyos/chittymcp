@@ -49,18 +49,28 @@ Each `chittyagent-<name>` worker MUST expose:
 - DO binding (env): `<NAME>_AGENT` (UPPER_SNAKE)
 
 ### Tool name
-**Pattern:** `<service>_<verb>` or `<service>_<noun>_<verb>`. Lowercase snake.
+**Pattern:** `<verb>` or `<noun>_<verb>` — **BARE. Do NOT prefix with the
+service name.** Lowercase snake. The MCP server name (`chittyagent-<name>`) and
+the aggregator namespace already carry the service; repeating it in the tool
+name is redundant and compounds badly through layers.
 
-| Good                   | Bad                  | Reason |
-|------------------------|----------------------|--------|
-| `tasks_list`           | `listTasks`          | wrong case |
-| `auth_resolve_token`   | `resolveAuthToken`   | wrong case |
-| `evidence_ingest`      | `ingest_evidence`    | verb-last |
-| `tasks_lease_claim`    | `claim`              | not namespaced |
+| Good        | Bad                  | Reason |
+|-------------|----------------------|--------|
+| `list`      | `tasks_list`         | service prefix is redundant (server is already `chittyagent-tasks`) |
+| `search`    | `notes_search`       | `chittyagent-notes` already names the service |
+| `resolve_token` | `auth_resolve_token` | drop the `auth_` prefix |
+| `ingest`    | `ingest_evidence`    | verb-last AND redundant |
+| `list`      | `listTasks`          | wrong case |
 
-Aggregators namespace as `<service>/<tool>` (e.g. `tasks/tasks_list`).
-Keep the service prefix in the inner tool name too — clients that bypass
-the aggregator (direct `<name>.chitty.cc/mcp`) still need self-descriptive names.
+**Why bare (binding):** an aggregator namespaces as `<service>/<tool>` and a
+downstream connector adds its OWN name on top. A service-prefixed tool
+therefore triples the service token end-to-end — e.g. `quo_send_message`
+federated through chittymsg and surfaced via the Chitty_Msg connector becomes
+`Chitty_Msg__chittyagent-quo_quo_send_message` ("quo" ×3). Bare `send_message`
+renders as `Chitty_Msg__chittyagent-quo_send_message` — the service appears
+exactly once, where it belongs (the server name). A client connected directly
+to `<name>.chitty.cc/mcp` already knows which server it called, so bare names
+are still self-descriptive there.
 
 ### Verbs
 Canonical verbs (extend cautiously, document if new):
@@ -68,8 +78,71 @@ Canonical verbs (extend cautiously, document if new):
 heartbeat, resolve, validate, ingest, search, render`.
 
 ### Tool grouping
-If a service has >8 tools, group by capability domain in the tool name:
-`storage_object_put`, `storage_object_get`, `storage_bucket_list`.
+If a service has >8 tools, group by capability domain in the tool name (still
+service-prefix-free): `object_put`, `object_get`, `bucket_list`.
+
+## 3.5 Prompt & Resource conventions (binding)
+
+Ratified from live precedent in `chittyagent-quo` and `chittyagent-imessage`
+(the first two workers to ship prompts + resources). `chittyagent-quo` is the
+canonical reference implementation — read its `src/prompts.ts` and
+`src/resources.ts`.
+
+### Prompt name
+**Pattern:** `<verb>` snake_case — **BARE, same rule as tools (§3).** Do NOT
+prefix with the service name; the server + aggregator namespace already carry
+it. `triage_inbound`, `summarize_thread`, `unified_brief` — good.
+`quo_triage_inbound` — bad (redundant `quo_`).
+
+A prompt body (the rendered `messages[].content.text`) SHOULD name the concrete
+bare tools the LLM is expected to call — prompts orchestrate this service's own
+tools by name (`search`, `list_messages`, …).
+
+### Resource URI + name
+**Resource name:** bare `<noun>` (`phone_numbers`, not `quo_phone_numbers`) —
+same bare rule as tools/prompts.
+
+**URI scheme:** `<service>://<domain>/<noun>` (kebab segments). Here the
+`<service>://` *scheme* IS the namespace mechanism for resources (the analog of
+the aggregator's `<service>/` tool prefix), so it names the service exactly
+once — that is correct, not redundant. NEVER `chitty://`, NEVER `chittycanon://`.
+
+| Scheme | Owner | Meaning |
+|--------|-------|---------|
+| `chittycanon://` | ChittyGov | canonical governance/service **identity** in the graph |
+| `chitty://` | reserved | ecosystem-internal cross-service references |
+| `<service>://` | the worker | **MCP resource handles** — live, read-only runtime data |
+
+An MCP resource URI is a transport handle for live data, NOT a canonical graph
+identifier — conflating them with `chittycanon://` is a violation.
+Examples: `quo://phone-numbers`, `quo://config/routing`, `imsg://sync/state`.
+
+- **Resource name** (first arg): bare `<noun>` snake_case (`phone_numbers`,
+  NOT `quo_phone_numbers`), mirroring the bare tool/prompt rule.
+- **MIME type:** explicit, always. `application/json` default; `text/markdown`
+  for rendered docs; `text/plain` for logs.
+
+### Argument schema
+Plain object of Zod validators (NOT a wrapped `z.object()`):
+`argsSchema: { from: e164, body: z.string().min(1) }`. Constrain types
+semantically (shared `e164` regex, `.min(1)`, `.int().min().max()`). Use
+`.describe()` on any argument whose purpose isn't obvious from its name.
+
+### Capabilities
+SDK-derived — do NOT hand-write the `capabilities` block. Calling
+`registerPrompt` / `registerResource` in `init()` makes McpServer advertise the
+`prompts` / `resources` capabilities automatically. Leave `listChanged` /
+`subscribe` OFF unless the list is dynamic or you actually honor
+`resources/subscribe` (declaring `subscribe` without implementing it is a
+non-working-endpoint violation).
+
+### @canon citation
+Cite canon ONCE at the module header of `prompts.ts` / `resources.ts`:
+```ts
+// @canon: chittycanon://gov/governance#core-types
+// @canonical-uri: chittycanon://core/services/chittyagent-<name>
+```
+Do NOT scatter P/L/T/E/A references into individual prompts.
 
 ## 4. The McpAgent wrap (canonical template)
 
@@ -95,14 +168,14 @@ const _e = (m: string) => ({
 
 function register<Name>Tools(server: McpServer, env: Env) {
   server.tool(
-    "<service>_<verb>",
+    "<verb>",                         // BARE — no service prefix (§3)
     "<one-line description>",
     { /* zod schema */ },
     async (input) => {
       try {
         const out = await <existingFunction>(env, input);
         return _t(out);
-      } catch (e) { return _e(`<service>_<verb> failed: ${(e as Error).message}`); }
+      } catch (e) { return _e(`<verb> failed: ${(e as Error).message}`); }
     },
   );
   // …more server.tool() calls
@@ -145,6 +218,56 @@ export default {
 ]
 ```
 
+### The prompt/resource wrap (canonical template)
+
+Keep prompts and resources in **separate files** (`prompts.ts`, `resources.ts`) —
+do not inline into the agent class. Register them in `init()` alongside tools.
+
+```ts
+// src/prompts.ts — static templates, no env needed
+// @canon: chittycanon://gov/governance#core-types
+import { z } from "zod";
+import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+
+export function register<Name>Prompts(server: McpServer) {
+  server.registerPrompt(
+    "<verb>",                         // BARE — no service prefix (§3.5)
+    { title: "<human label>", description: "<what it does + which tools it orchestrates>",
+      argsSchema: { /* zod validators */ } },
+    (args) => ({ messages: [{ role: "user", content: { type: "text", text:
+      [ "<task>", "", "Use `<tool>` to …" ].join("\n") } }] }),
+  );
+}
+
+// src/resources.ts — LIVE data only, no mocks (see §6)
+// @canon: chittycanon://gov/governance#core-types
+import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+
+export function register<Name>Resources(
+  server: McpServer, env: Env, getCredential: (n: string) => Promise<string>,
+) {
+  server.registerResource(
+    "<noun>", "<service>://<domain>/<noun>",   // bare name; service lives in the URI scheme
+    { title: "<label>", description: "<live data this serves>", mimeType: "application/json" },
+    async (uri) => {
+      const data = await /* real REST client / Neon query / env config */;
+      return { contents: [{ uri: uri.href, mimeType: "application/json",
+        text: JSON.stringify(data, null, 2) }] };
+    },
+  );
+}
+
+// in the agent: async init() {
+//   register<Name>Tools(this.server, this.env);
+//   register<Name>Prompts(this.server);
+//   register<Name>Resources(this.server, this.env, (n) => resolveCredential(this.env, n, SERVICE));
+// }
+```
+
+**No-resource is a valid outcome.** If a service has no real live data to expose
+(a pure-action worker), ship prompts only and say so — do NOT fabricate a
+resource to fill the slot. Mock resources violate §6.
+
 ## 5. Endpoints (binding)
 
 Every service MCP MUST be reachable at three addresses, all serving identical
@@ -166,7 +289,21 @@ clients SHOULD prefer `canonical`.
 - No placeholder route bodies. Every tool calls a real implementation.
 - No `vi.mock(...)` on DB/service modules in new tests.
 - Every PR body MUST include a real `tools/list` curl output from the
-  deployed endpoint as evidence the wrap landed.
+  deployed endpoint as evidence the wrap landed. When the PR adds prompts or
+  resources, it MUST also include `prompts/list` and `resources/list` output
+  from the deployed endpoint — every resource proven to return live data.
+- Generate that evidence with **`scripts/verify-mcp.sh`** — it runs the full
+  `initialize → tools/list → prompts/list → resources/list` handshake (and
+  `--read` proves every resource returns live data):
+  ```bash
+  scripts/verify-mcp.sh <service> --read          # canonical <name>.chitty.cc
+  scripts/verify-mcp.sh <service> --origin --read  # if the canonical domain is Access-gated
+  MCP_BEARER=$KEY scripts/verify-mcp.sh mcp.chitty.cc/<service>/mcp  # aggregated path
+  ```
+- **Verification ≠ persistence.** Deploying an unmerged branch to production to
+  capture this evidence is transient — the next deploy of that worker from
+  `main` reverts it. The prompts/resources are durable ONLY once the PR merges.
+  Treat the PR as the source of truth, not the live-but-unmerged deployment.
 
 ## 7. Step-by-step (the procedure)
 
