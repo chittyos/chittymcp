@@ -1478,6 +1478,28 @@ export default {
       }
     }
 
+    // GET /mcp (and /mcp/) — Streamable-HTTP clients (Claude.ai / ChatGPT
+    // connectors) issue a GET to the endpoint while adding the server, before
+    // any POST. We do not serve a server->client SSE stream, but the response
+    // MUST be the 401 auth challenge when unauthenticated (so the client starts
+    // the OAuth handshake) or 405 when authenticated — NEVER 404. A bare 404
+    // here makes the connector report "not found" and abort before OAuth ever
+    // begins. The per-service `/{svc}/mcp` paths already gate GET via the proxy
+    // loop above; only the aggregate endpoint was POST-only. Mirrors the
+    // working mcp.ch1tty.com host, which returns 401 on `GET /mcp`.
+    if ((path === "/mcp" || path.startsWith("/mcp/")) && request.method === "GET") {
+      const authErr = await requireBearerTokenAsync(request, env);
+      if (authErr) return authErr;
+      return new Response(
+        JSON.stringify({
+          jsonrpc: "2.0",
+          id: null,
+          error: { code: -32000, message: "Method Not Allowed: POST JSON-RPC to this endpoint" },
+        }),
+        { status: 405, headers: { "Content-Type": "application/json", Allow: "POST", ...corsHeaders() } },
+      );
+    }
+
     // Aggregated MCP at /mcp (auth-gated)
     // Treat `/` (no path) the same as `/mcp` for POST — some MCP clients
     // (Claude.ai connector when user enters `mcp.chitty.cc` without trailing
