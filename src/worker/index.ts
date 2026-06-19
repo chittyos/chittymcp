@@ -44,6 +44,11 @@ interface Env {
   SVC_TWILIO: Fetcher;
   SVC_VIEWPORT: Fetcher;
   SVC_UI: Fetcher;
+  SVC_COMPTROLLER: Fetcher;
+  SVC_GIT: Fetcher;
+  SVC_HUMAN_ESCALATOR: Fetcher;
+  SVC_MCP_BUILDER: Fetcher;
+  SVC_SCHEMA: Fetcher;
   // MCP_API_KEY: shared secret required for /mcp aggregator + /{service}/mcp proxy.
   // Set via `wrangler secret put MCP_API_KEY`.
   MCP_API_KEY?: string;
@@ -135,6 +140,11 @@ const SERVICE_MAP: Record<string, ServiceEntry> = {
   twilio:           { binding: "SVC_TWILIO",           label: "Twilio bridge",                      category: "communication" },
   viewport:         { binding: "SVC_VIEWPORT",         label: "Session Viewport",                   category: "platform" },
   ui:               { binding: "SVC_UI",               label: "Ui (auto-bound)",                    category: "platform" },
+  comptroller:      { binding: "SVC_COMPTROLLER",      label: "Comptroller",                        category: "finance" },
+  git:              { binding: "SVC_GIT",              label: "Git integration",                    category: "devops" },
+  "human-escalator":{ binding: "SVC_HUMAN_ESCALATOR",  label: "Human Escalator",                    category: "communication" },
+  "mcp-builder":    { binding: "SVC_MCP_BUILDER",      label: "MCP Builder",                        category: "devops" },
+  schema:           { binding: "SVC_SCHEMA",           label: "Schema registry and drift audit",    category: "governance" },
 };
 
 // Aggregate sub-views: a POST to /{view}/mcp federates only the services whose
@@ -302,18 +312,18 @@ async function cfApi<T = unknown>(env: Env, path: string, init?: RequestInit): P
       ...(init?.headers || {}),
     },
   });
-  let payload: { success: boolean; result: T; errors?: Array<{ message: string }> } | null = null;
+  let payload: any = null;
   try {
-    payload = await res.json() as typeof payload;
+    payload = await res.json();
   } catch {
     // Non-JSON body (CF edge HTML during incidents, gateway errors, etc.)
     throw new CfApiError(`Cloudflare returned non-JSON body (HTTP ${res.status})`, res.status, method, path);
   }
   if (!res.ok || !payload || !payload.success) {
-    const msg = payload?.errors?.map((e) => e.message).join("; ") || `HTTP ${res.status}`;
+    const msg = payload?.errors?.map((e: any) => e.message).join("; ") || `HTTP ${res.status}`;
     throw new CfApiError(msg, res.status, method, path);
   }
-  return payload.result;
+  return payload.result as T;
 }
 
 interface ReconcileResult {
@@ -1258,6 +1268,7 @@ export default {
           id,
           name: `chittyagent-${id}`,
           label: s.label,
+          category: s.category || "ecosystem",
           transport: "streamable-http",
           endpoints: {
             aggregated: `https://mcp.chitty.cc/${id}/mcp`,

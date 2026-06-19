@@ -54,7 +54,11 @@
     { "binding": "SVC_SANDBOX",      "service": "chittyagent-sandbox" },
     { "binding": "SVC_BLUEBUBBLES", "service": "chittyagent-bluebubbles" },
     { "binding": "SVC_TWILIO", "service": "chittyagent-twilio" },
-    { "binding": "SVC_UI", "service": "chittyagent-ui" }
-  
+    { "binding": "SVC_UI", "service": "chittyagent-ui" },
+    { "binding": "SVC_COMPTROLLER", "service": "chittyagent-comptroller" },
+    { "binding": "SVC_GIT", "service": "chittyagent-git" },
+    { "binding": "SVC_HUMAN_ESCALATOR", "service": "chittyagent-human-escalator" },
+    { "binding": "SVC_MCP_BUILDER", "service": "chittyagent-mcp-builder" },
+    { "binding": "SVC_SCHEMA", "service": "chittyagent-schema" }
   ]
 }
