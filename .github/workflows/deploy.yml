@@ -93,14 +93,14 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
-          npx wrangler deploy --config wrangler.jsonc
+          npx wrangler@4 deploy --config wrangler.jsonc
 
       - name: Verify deployment
         env:
           CHITTY_ID_TOKEN: ${{ secrets.CHITTY_ID_TOKEN }}
         run: |
           sleep 10
-          HEALTH=$(curl -s https://mcp.chitty.cc/health || echo '{"status":"unknown"}')
+          HEALTH=$(curl -s https://mcp-aggregator.chitty.cc/health || echo '{"status":"unknown"}')
           STATUS=$(echo $HEALTH | jq -r '.status' || echo "unknown")
 
           if [ "$STATUS" != "healthy" ] && [ "$STATUS" != "unknown" ]; then
