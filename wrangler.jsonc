@@ -9,7 +9,7 @@
   "tail_consumers": [{ "service": "chittytrack" }],
 
   "routes": [
-    { "pattern": "mcp-aggregator.chitty.cc/*", "zone_name": "chitty.cc" }
+    { "pattern": "mcp.chitty.cc/*", "zone_name": "chitty.cc" }
   ],
 
   // Service bindings — every chittyagent-* worker confirmed live at
