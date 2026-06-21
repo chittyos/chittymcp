@@ -15,7 +15,8 @@
     "dev:evidence": "nodemon src/servers/evidence-server.js",
     "test": "node --test test/governance-gates.test.js",
     "lint": "eslint .",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "deploy:prod": "wrangler deploy --config wrangler.jsonc --env production"
   },
   "keywords": [
     "mcp",
