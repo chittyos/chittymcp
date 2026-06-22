@@ -49,18 +49,18 @@ log_section() {
 }
 
 log_test() {
-    ((TOTAL_TESTS++))
+    ((TOTAL_TESTS++)) || true
     echo -e "${BLUE}▶${NC} $1"
 }
 
 log_pass() {
-    ((PASSED_TESTS++))
+    ((PASSED_TESTS++)) || true
     echo -e "${GREEN}✓${NC} $1"
     RESULTS+=("PASS: $1")
 }
 
 log_fail() {
-    ((FAILED_TESTS++))
+    ((FAILED_TESTS++)) || true
     echo -e "${RED}✗${NC} $1"
     RESULTS+=("FAIL: $1")
     if [ -n "$2" ]; then
@@ -72,7 +72,7 @@ log_fail() {
 }
 
 log_warn() {
-    ((WARNINGS++))
+    ((WARNINGS++)) || true
     echo -e "${YELLOW}⚠${NC} $1"
     RESULTS+=("WARN: $1")
 }
@@ -649,8 +649,8 @@ main() {
     log_info "Saving report to: $REPORT_FILE"
 
     # Redirect output to both console and file
-    exec > >(tee -a "$REPORT_FILE")
-    exec 2>&1
+    # exec > >(tee -a "$REPORT_FILE")
+    # exec 2>&1
 
     # Run all tests
     test_endpoints
