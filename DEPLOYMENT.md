@@ -134,7 +134,7 @@ zone_name = "chitty.cc"
 Then deploy:
 
 ```bash
-cf deploy
+wrangler deploy
 ```
 
 #### Monitoring
@@ -318,7 +318,7 @@ wrangler login
 grep account_id wrangler.toml
 
 # Check for errors
-cf deploy --dry-run
+wrangler deploy --dry-run
 ```
 
 ### Cloudflare: Secrets Not Working

@@ -202,7 +202,7 @@ const toolResponse = await fetch('https://mcp.chitty.cc/tools/execute', {
 ## Deployment Commands
 ```bash
 # Deploy with route
-cf deploy
+wrangler deploy
 
 # Monitor logs
 wrangler tail chittymcp --format pretty

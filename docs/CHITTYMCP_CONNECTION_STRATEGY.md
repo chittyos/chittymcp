@@ -221,7 +221,7 @@ ChittyMCP uses chittysecrets as the single source of truth for all credentials:
 # scripts/provision-dev-credentials.sh
 
 # Load credentials from chittysecrets into local .env
-chittysecrets run --env-file=<(cat <<'EOF'
+op run --env-file=<(cat <<'EOF'
 export CHITTY_ID_TOKEN=op://ChittyOS-Secrets/CHITTY_ID_TOKEN/password
 export CHITTY_AUTH_TOKEN=op://ChittyOS-Secrets/CHITTY_AUTH_TOKEN/password
 export CHITTY_ROUTER_TOKEN=op://ChittyOS-Secrets/CHITTY_ROUTER_TOKEN/password
@@ -713,7 +713,7 @@ ChittyMCP supports three environments with distinct configuration:
 #### Development Environment
 
 **Purpose**: Local development and testing
-**Credential Source**: chittysecrets (via `chittysecrets run`)
+**Credential Source**: chittysecrets (via `op run`)
 **Database**: Shared staging database or local PostgreSQL
 **Service URLs**: Staging ChittyOS services
 

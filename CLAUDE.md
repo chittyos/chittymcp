@@ -44,7 +44,7 @@ yourself reaching for `src/tools/`, you are in the wrong place.
 
 ```bash
 # Deploy aggregator
-npx cf deploy
+npx wrangler deploy
 
 # Verify aggregator is healthy
 curl -s https://mcp.chitty.cc/health | jq .

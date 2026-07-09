@@ -78,7 +78,7 @@ bindings list — if you have to add a hand-written case, refactor first).
 ## Step 5 — Deploy & smoke-test
 
 ```
-npx cf deploy
+npx wrangler deploy
 curl -s -X POST https://mcp.chitty.cc/<name>/mcp \
   -H 'content-type: application/json' \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | jq '.result.tools | length'

@@ -301,7 +301,7 @@ Unified server can be deployed as a Cloudflare Worker:
 
 ```bash
 # Deploy to production
-cf deploy
+wrangler deploy
 
 # Monitor logs
 wrangler tail chittymcp
