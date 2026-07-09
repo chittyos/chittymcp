@@ -17,7 +17,7 @@
  *   3. Appends the canonical McpAgent block to src/index.ts
  *   4. Adds @modelcontextprotocol/sdk, agents, zod to package.json
  *   5. Adds DO binding + migration entry to wrangler.jsonc
- *   6. Prints the next-step commands (npm install + wrangler deploy + curl verify)
+ *   6. Prints the next-step commands (npm install + cf deploy + curl verify)
  *
  * What it does NOT do:
  *   - Implement tool bodies. The scaffold leaves a TODO_TOOL_BODY marker — you
@@ -195,7 +195,7 @@ function main() {
   console.log(`  1. Edit src/index.ts and replace TODO_TOOL_BODY markers with real backend calls`);
   console.log(`  2. Apply the wrangler.jsonc edits printed above`);
   console.log(`  3. Wire ${args.service.replace(/-/g, "_")}McpHandler into the default export's fetch path`);
-  console.log(`  4. cd ${workerDir} && npm install && npx wrangler deploy --env production`);
+  console.log(`  4. cd ${workerDir} && npm install && npx cf deploy --env production`);
   console.log(`  5. Verify: curl -sX POST https://${args.service}.chitty.cc/mcp \\`);
   console.log(`       -H 'content-type: application/json' \\`);
   console.log(`       -H 'accept: application/json, text/event-stream' \\`);

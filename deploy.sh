@@ -118,7 +118,7 @@ EOF
 
         # Deploy
         cd ..
-        wrangler deploy
+        cf deploy
 
         echo -e "${GREEN}✓ Cloudflare deployment complete!${NC}"
         echo ""

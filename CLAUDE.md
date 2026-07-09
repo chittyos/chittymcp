@@ -44,7 +44,7 @@ yourself reaching for `src/tools/`, you are in the wrong place.
 
 ```bash
 # Deploy aggregator
-npx wrangler deploy
+npx cf deploy
 
 # Verify aggregator is healthy
 curl -s https://mcp.chitty.cc/health | jq .
@@ -97,7 +97,7 @@ are centralized through the aggregator.
   required from chittymcp; they trust the binding).
 - Direct calls to `<name>.chitty.cc/mcp` use Cloudflare Access + per-worker
   bearer (varies by service — see each worker's `auth.ts`).
-- Secrets flow through 1Password → CF secrets store. Never hardcode.
+- Secrets flow through chittysecrets → CF secrets store. Never hardcode.
 
 ## Don't ship
 

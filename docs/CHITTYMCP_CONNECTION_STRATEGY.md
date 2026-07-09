@@ -9,11 +9,11 @@
 
 ## Executive Summary
 
-This document outlines the comprehensive connection architecture, credential management strategy, and security implementation for the ChittyMCP unified MCP server. It provides a zero-trust security model integrating with ChittyConnect, 1Password, and Cloudflare Workers secrets management.
+This document outlines the comprehensive connection architecture, credential management strategy, and security implementation for the ChittyMCP unified MCP server. It provides a zero-trust security model integrating with ChittyConnect, chittysecrets, and Cloudflare Workers secrets management.
 
 **Key Components**:
 - Service-to-service authentication via ChittyConnect patterns
-- 1Password-based credential provisioning
+- chittysecrets-based credential provisioning
 - ContextConsciousness session management for MCP workflows
 - Environment-specific configuration (dev, staging, production)
 - Automated secret rotation strategy
@@ -94,7 +94,7 @@ ChittyMCP operates across multiple trust boundaries:
 | **External Trust Zone** | OAuth 2.0 (future), API keys | Read-only by default | TLS 1.3 |
 | **DMZ** | Service tokens | Scope-based RBAC | TLS 1.3 + JWT |
 | **Internal ChittyOS** | Service tokens (SHA-256 validated) | Service-to-service scopes | mTLS (future) |
-| **External Integration** | API keys (1Password managed) | Vendor-specific | TLS 1.3 |
+| **External Integration** | API keys (chittysecrets managed) | Vendor-specific | TLS 1.3 |
 
 ---
 
@@ -115,11 +115,11 @@ ChittyMCP operates across multiple trust boundaries:
 
 | Service | Authentication | Credential Source | Rotation Period | Purpose |
 |---------|----------------|-------------------|-----------------|---------|
-| **Cloudflare API** | `Bearer CLOUDFLARE_API_TOKEN` | 1Password: `ChittyOS-Secrets/CLOUDFLARE_API_TOKEN` | 90 days | Worker deployment, KV/R2/D1 management |
+| **Cloudflare API** | `Bearer CLOUDFLARE_API_TOKEN` | chittysecrets: `ChittyOS-Secrets/CLOUDFLARE_API_TOKEN` | 90 days | Worker deployment, KV/R2/D1 management |
 | **Google Drive** | File system path | Local mount | N/A | Evidence source monitoring |
-| **Notion** | `Bearer NOTION_TOKEN` | 1Password: `ChittyOS-Secrets/NOTION_TOKEN` | 180 days | Evidence database sync (optional) |
-| **OpenAI** | `Bearer OPENAI_API_KEY` | 1Password: `ChittyOS-Secrets/OPENAI_API_KEY` | Manual | AI-powered document analysis |
-| **Anthropic** | `x-api-key: ANTHROPIC_API_KEY` | 1Password: `ChittyOS-Secrets/ANTHROPIC_API_KEY` | Manual | AI-powered reasoning |
+| **Notion** | `Bearer NOTION_TOKEN` | chittysecrets: `ChittyOS-Secrets/NOTION_TOKEN` | 180 days | Evidence database sync (optional) |
+| **OpenAI** | `Bearer OPENAI_API_KEY` | chittysecrets: `ChittyOS-Secrets/OPENAI_API_KEY` | Manual | AI-powered document analysis |
+| **Anthropic** | `x-api-key: ANTHROPIC_API_KEY` | chittysecrets: `ChittyOS-Secrets/ANTHROPIC_API_KEY` | Manual | AI-powered reasoning |
 
 ### Connection Validation Flow
 
@@ -179,9 +179,9 @@ async function establishConnection(
 
 ## Credential Management
 
-### 1Password Integration Architecture
+### chittysecrets Integration Architecture
 
-ChittyMCP uses 1Password as the single source of truth for all credentials:
+ChittyMCP uses chittysecrets as the single source of truth for all credentials:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -220,8 +220,8 @@ ChittyMCP uses 1Password as the single source of truth for all credentials:
 #!/bin/bash
 # scripts/provision-dev-credentials.sh
 
-# Load credentials from 1Password into local .env
-op run --env-file=<(cat <<'EOF'
+# Load credentials from chittysecrets into local .env
+chittysecrets run --env-file=<(cat <<'EOF'
 export CHITTY_ID_TOKEN=op://ChittyOS-Secrets/CHITTY_ID_TOKEN/password
 export CHITTY_AUTH_TOKEN=op://ChittyOS-Secrets/CHITTY_AUTH_TOKEN/password
 export CHITTY_ROUTER_TOKEN=op://ChittyOS-Secrets/CHITTY_ROUTER_TOKEN/password
@@ -265,9 +265,9 @@ wrangler secret list --env production | grep -E "CHITTY_ID_TOKEN|NEON_DATABASE_U
 
 | Credential Type | Storage | Access Control | Rotation | Audit |
 |----------------|---------|----------------|----------|-------|
-| **Service Tokens** | 1Password + Cloudflare Secrets | ChittyMCP only | 90 days | All access logged |
-| **Database URLs** | 1Password + Cloudflare Secrets | ChittyMCP + DB admins | On compromise | Connection logs |
-| **API Keys** | 1Password + Cloudflare Secrets | ChittyMCP only | Per vendor policy | Usage tracked |
+| **Service Tokens** | chittysecrets + Cloudflare Secrets | ChittyMCP only | 90 days | All access logged |
+| **Database URLs** | chittysecrets + Cloudflare Secrets | ChittyMCP + DB admins | On compromise | Connection logs |
+| **API Keys** | chittysecrets + Cloudflare Secrets | ChittyMCP only | Per vendor policy | Usage tracked |
 | **Session Keys** | Generated runtime | ChittyMCP process | Per session | ContextConsciousness |
 
 ### Secrets Never to Commit
@@ -713,7 +713,7 @@ ChittyMCP supports three environments with distinct configuration:
 #### Development Environment
 
 **Purpose**: Local development and testing
-**Credential Source**: 1Password (via `op run`)
+**Credential Source**: chittysecrets (via `chittysecrets run`)
 **Database**: Shared staging database or local PostgreSQL
 **Service URLs**: Staging ChittyOS services
 
@@ -775,7 +775,7 @@ wrangler secret put CLOUDFLARE_API_TOKEN --env staging
 #### Production Environment
 
 **Purpose**: Live production deployment
-**Credential Source**: Cloudflare Workers secrets (from 1Password)
+**Credential Source**: Cloudflare Workers secrets (from chittysecrets)
 **Database**: Production Neon database (`chittyos-core`)
 **Service URLs**: Production ChittyOS services
 
@@ -866,10 +866,10 @@ function validateEnvironmentConfiguration(): void {
 
 | Credential Type | Rotation Period | Trigger | Process |
 |----------------|-----------------|---------|---------|
-| **Service Tokens** | 90 days | Automated reminder | 1. Generate new token via ChittyAuth<br>2. Update 1Password vault<br>3. Update Cloudflare secrets<br>4. Verify all services operational<br>5. Revoke old token |
-| **Database Passwords** | On compromise | Security incident | 1. Generate new password via Neon<br>2. Update 1Password vault<br>3. Update Cloudflare secrets<br>4. Verify connection<br>5. Revoke old password |
-| **Cloudflare API Token** | 90 days | Automated reminder | 1. Generate new token via Cloudflare Dashboard<br>2. Update 1Password vault<br>3. Update Cloudflare secrets<br>4. Verify deployments work<br>5. Revoke old token |
-| **AI API Keys** | As per vendor policy | Manual | 1. Generate new key via vendor<br>2. Update 1Password vault<br>3. Update Cloudflare secrets<br>4. Verify AI tools work<br>5. Revoke old key |
+| **Service Tokens** | 90 days | Automated reminder | 1. Generate new token via ChittyAuth<br>2. Update chittysecrets vault<br>3. Update Cloudflare secrets<br>4. Verify all services operational<br>5. Revoke old token |
+| **Database Passwords** | On compromise | Security incident | 1. Generate new password via Neon<br>2. Update chittysecrets vault<br>3. Update Cloudflare secrets<br>4. Verify connection<br>5. Revoke old password |
+| **Cloudflare API Token** | 90 days | Automated reminder | 1. Generate new token via Cloudflare Dashboard<br>2. Update chittysecrets vault<br>3. Update Cloudflare secrets<br>4. Verify deployments work<br>5. Revoke old token |
+| **AI API Keys** | As per vendor policy | Manual | 1. Generate new key via vendor<br>2. Update chittysecrets vault<br>3. Update Cloudflare secrets<br>4. Verify AI tools work<br>5. Revoke old key |
 
 ### Automated Rotation Script
 
@@ -909,14 +909,14 @@ fi
 
 echo "✅ New token generated"
 
-# Step 2: Update 1Password vault
-echo "📝 Step 2: Updating 1Password vault..."
+# Step 2: Update chittysecrets vault
+echo "📝 Step 2: Updating chittysecrets vault..."
 op item edit "$TOKEN_NAME" \
   --vault "ChittyOS-Secrets" \
   password="$NEW_TOKEN" \
   "expires=$(date -v+90d +%Y-%m-%d)"
 
-echo "✅ 1Password vault updated"
+echo "✅ chittysecrets vault updated"
 
 # Step 3: Update Cloudflare Workers secrets (staging)
 echo "📝 Step 3: Updating staging secrets..."
@@ -969,9 +969,9 @@ echo "🎉 Token rotation complete for $SERVICE_NAME"
  */
 async function monitorCredentialExpiration(): Promise<void> {
   const credentials = [
-    { name: 'CHITTY_ID_TOKEN', source: '1Password' },
-    { name: 'CHITTY_AUTH_TOKEN', source: '1Password' },
-    { name: 'CLOUDFLARE_API_TOKEN', source: '1Password' }
+    { name: 'CHITTY_ID_TOKEN', source: 'chittysecrets' },
+    { name: 'CHITTY_AUTH_TOKEN', source: 'chittysecrets' },
+    { name: 'CLOUDFLARE_API_TOKEN', source: 'chittysecrets' }
   ];
 
   for (const cred of credentials) {
@@ -1012,16 +1012,16 @@ async function sendRotationAlert(credentialName: string, daysLeft: number): Prom
 
 **Goal**: Establish secure credential management and basic service connections
 
-- [ ] **1.1** Create 1Password vault structure for ChittyOS-Secrets
+- [ ] **1.1** Create chittysecrets vault structure for ChittyOS-Secrets
 - [ ] **1.2** Generate service tokens for ChittyID, ChittyAuth, ChittyRouter, ChittyRegistry
-- [ ] **1.3** Store all credentials in 1Password with metadata (scopes, expiration)
+- [ ] **1.3** Store all credentials in chittysecrets with metadata (scopes, expiration)
 - [ ] **1.4** Set up Cloudflare Workers secrets for staging environment
 - [ ] **1.5** Implement ChittyConnectClient class with standard service call pattern
 - [ ] **1.6** Add connection validation and health check logic
 - [ ] **1.7** Test service-to-service authentication with ChittyID
 
 **Deliverables**:
-- 1Password vault with all required credentials
+- chittysecrets vault with all required credentials
 - `lib/chitty-connect-client.ts` implementation
 - Staging environment fully configured
 - Service connection tests passing
@@ -1133,7 +1133,7 @@ async function sendRotationAlert(credentialName: string, daysLeft: number): Prom
 
 ### Security Metrics
 
-- [ ] 100% of credentials stored in 1Password (zero hard-coded secrets)
+- [ ] 100% of credentials stored in chittysecrets (zero hard-coded secrets)
 - [ ] All service-to-service calls authenticated with service tokens
 - [ ] Zero-trust principles enforced (verify explicitly, least privilege, assume breach)
 - [ ] All connections logged to ContextConsciousness for audit
@@ -1244,7 +1244,7 @@ PUT    /api/v1/services/{name}/health Update health status
 
 | Code | Description | Mitigation |
 |------|-------------|------------|
-| `MISSING_CREDENTIAL` | Required token not found | Check 1Password vault and Cloudflare secrets |
+| `MISSING_CREDENTIAL` | Required token not found | Check chittysecrets vault and Cloudflare secrets |
 | `HEALTH_CHECK_FAILED` | Service health check returned non-200 | Verify service is running, check service logs |
 | `AUTHENTICATION_FAILED` | Service token rejected | Verify token is active and not expired, check scopes |
 | `TIMEOUT` | Service did not respond within timeout | Check service performance, increase timeout if needed |

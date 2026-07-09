@@ -9,7 +9,7 @@
 Read-only git inspection for non-shell channels (ChatGPT, mobile Claude, scheduled
 routines, ch1tty slim-MCP via `search`+`execute`). Write/sensitive git operations
 (`git_commit`, `git_push`, `git_tag`) are intentionally **not** in this upstream —
-they live on ChittyConnect (`connect.chitty.cc/mcp`) behind OAuth + 1Password +
+they live on ChittyConnect (`connect.chitty.cc/mcp`) behind OAuth + chittysecrets +
 ChittyLedger audit per the sensitive-intent contract.
 
 ## Aggregator surface
@@ -43,7 +43,7 @@ which paths it can read via an env-configured allowlist:
 - **Default:** `/home/ubuntu/projects/`
 - **Resolution:** Each call's `repo_path` is canonicalized (no `..`, no symlinks
   escaping the prefix) and prefix-matched. Failures return `REPO_NOT_ALLOWED`.
-- **Cold source:** value provisioned via 1Password → CF secrets store. Per global
+- **Cold source:** value provisioned via chittysecrets → CF secrets store. Per global
   policy, never paste-in. The allowlist itself is non-secret but follows the
   same provisioning path for consistency.
 

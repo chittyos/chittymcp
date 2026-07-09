@@ -492,7 +492,7 @@ mcp.get("/tools/list", (c) => {
           required: ["task"],
         },
       },
-      // Credential Management Tools (1Password Integration)
+      // Credential Management Tools (chittysecrets Integration)
       ...credentialTools.map(tool => ({
         name: tool.name,
         description: tool.description,
@@ -606,7 +606,7 @@ mcp.post("/tools/call", async (c) => {
         result = await analyzeCoordinationTask(args, c);
         break;
 
-      // Credential Management Tools (1Password Integration)
+      // Credential Management Tools (chittysecrets Integration)
       case "chitty_credential_retrieve":
       case "chitty_credential_provision":
       case "chitty_credential_validate":

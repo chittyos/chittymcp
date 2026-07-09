@@ -134,7 +134,7 @@ zone_name = "chitty.cc"
 Then deploy:
 
 ```bash
-wrangler deploy
+cf deploy
 ```
 
 #### Monitoring
@@ -318,7 +318,7 @@ wrangler login
 grep account_id wrangler.toml
 
 # Check for errors
-wrangler deploy --dry-run
+cf deploy --dry-run
 ```
 
 ### Cloudflare: Secrets Not Working
@@ -430,7 +430,7 @@ Cloudflare Workers automatically scale to handle load. No configuration needed.
 **Use**:
 - Cloudflare secrets (wrangler secret put)
 - Environment variables
-- 1Password CLI integration
+- chittysecrets CLI integration
 
 ### Network Security
 

@@ -3,21 +3,21 @@
  *
  * Provides Model Context Protocol tools for Claude to securely
  * retrieve and manage credentials through ChittyConnect's
- * 1Password integration.
+ * chittysecrets integration.
  *
  * Security: All credential requests are validated through
- * ContextConsciousness™ before retrieval from 1Password.
+ * ContextConsciousness™ before retrieval from chittysecrets.
  */
 
 /**
  * Tool: chitty_credential_retrieve
  *
- * Securely retrieve a credential from 1Password based on context.
+ * Securely retrieve a credential from chittysecrets based on context.
  * The credential is validated through ContextConsciousness™ before retrieval.
  */
 export const credentialRetrieveTool = {
   name: 'chitty_credential_retrieve',
-  description: 'Securely retrieve a credential from 1Password vault with context validation',
+  description: 'Securely retrieve a credential from chittysecrets vault with context validation',
   inputSchema: {
     type: 'object',
     properties: {
@@ -106,13 +106,13 @@ export const credentialRetrieveTool = {
         };
       }
 
-      // Retrieve credential from 1Password
+      // Retrieve credential from chittysecrets
       const credential = await onePassword.retrieveCredential(credentialPath, context);
 
       if (!credential) {
         return {
           success: false,
-          error: 'Failed to retrieve credential from 1Password',
+          error: 'Failed to retrieve credential from chittysecrets',
           details: 'The credential may not exist or access was denied'
         };
       }
@@ -580,7 +580,7 @@ export const credentialHealthTool = {
     try {
       const { onePassword } = await initializeProviders(env);
 
-      // Check 1Password connection
+      // Check chittysecrets connection
       const onePasswordHealth = await onePassword.healthCheck();
 
       // Check database
@@ -713,7 +713,7 @@ function generateRequestId() {
 
 async function initializeProviders(env) {
   // Lazy import to avoid circular dependencies
-  const { OnePasswordConnectClient } = await import('../../services/1password-connect-client.js');
+  const { OnePasswordConnectClient } = await import('../../services/chittysecrets-connect-client.js');
   const { EnhancedCredentialProvisioner } = await import('../../services/credential-provisioner-enhanced.js');
 
   const onePassword = new OnePasswordConnectClient(env);
@@ -735,7 +735,7 @@ async function revokeCloudflareToken(token_id, env) {
   let makeApiKey = env.CLOUDFLARE_MAKE_API_KEY;
 
   if (!makeApiKey) {
-    // Try to retrieve from 1Password
+    // Try to retrieve from chittysecrets
     const { onePassword } = await initializeProviders(env);
     makeApiKey = await onePassword.get(
       'infrastructure/cloudflare/make_api_key'

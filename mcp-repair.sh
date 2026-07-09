@@ -398,7 +398,7 @@ EOF
   "main": "src/index.ts",
   "scripts": {
     "dev": "wrangler dev",
-    "deploy": "wrangler deploy",
+    "deploy": "cf deploy",
     "tail": "wrangler tail"
   },
   "dependencies": {

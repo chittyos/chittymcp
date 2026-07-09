@@ -6,9 +6,9 @@
   "main": "src/index.js",
   "scripts": {
     "dev": "wrangler dev",
-    "deploy": "wrangler deploy",
-    "deploy:production": "wrangler deploy --env production",
-    "deploy:staging": "wrangler deploy --env staging",
+    "deploy": "cf deploy",
+    "deploy:production": "cf deploy --env production",
+    "deploy:staging": "cf deploy --env staging",
     "tail": "wrangler tail",
     "test": "vitest",
     "lint": "eslint src/"

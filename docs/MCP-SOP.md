@@ -311,7 +311,7 @@ clients SHOULD prefer `canonical`.
 |---|--------|------|
 | 1 | Run `scripts/scaffold-mcp.ts --service <name>` (or apply template by hand) | Code compiles |
 | 2 | `npm install` in the worker's directory | `agents`, `@modelcontextprotocol/sdk`, `zod` resolved |
-| 3 | `npx wrangler deploy --env production` | Deploy succeeds; DO migration applied |
+| 3 | `npx cf deploy --env production` | Deploy succeeds; DO migration applied |
 | 4 | `curl -sX POST https://<name>.chitty.cc/mcp …` (initialize + tools/list) | ≥1 tool returned |
 | 5 | If new service: register with CF gateway with `surface:all` + correct domain/audience/auth/tier tags | Registry returns entry |
 | 6 | Add `SVC_<NAME>` binding to `chittymcp/wrangler.jsonc` + entry in `SERVICE_MAP` (`src/worker/index.ts`) | Aggregated `mcp.chitty.cc/<name>/mcp` returns same tools |

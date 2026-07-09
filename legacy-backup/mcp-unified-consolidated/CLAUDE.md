@@ -466,15 +466,15 @@ GATEWAY_SERVICE=https://gateway.chitty.cc
 REGISTRY_SERVICE=https://registry.chitty.cc
 
 # Cloudflare
-CLOUDFLARE_API_TOKEN=<from 1Password>
+CLOUDFLARE_API_TOKEN=<from chittysecrets>
 CLOUDFLARE_ACCOUNT_ID=bbf9fcd845e78035b7a135c481e88541
 
 # AI APIs
-ANTHROPIC_API_KEY=<from 1Password>
-OPENAI_API_KEY=<from 1Password>
+ANTHROPIC_API_KEY=<from chittysecrets>
+OPENAI_API_KEY=<from chittysecrets>
 
 # Database
-NEON_DATABASE_URL=<from 1Password>
+NEON_DATABASE_URL=<from chittysecrets>
 ```
 
 ---
