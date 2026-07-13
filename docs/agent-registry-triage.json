@@ -14,7 +14,7 @@
   "buckets": {
     "A_mcp_layer_live_on_main": {
       "description": "Worker is live, McpAgent layer merged to chittyentity main, SVC_* binding in chittymcp/wrangler.jsonc and SERVICE_MAP. Aggregator deployed with 38 service bindings. 153 tools live via mcp.chitty.cc/mcp (tools/list). Last 2 added: cloudflare + finance via chittyentity PR #292 + chittymcp PR #85.",
-      "services": ["alchemist", "auth", "autoassist", "availability", "bluebubbles", "bridge-consent", "buyflow", "canon", "chatgpt", "ch1tty", "cleaner", "cloudflare", "dispatch", "dispute", "evidence", "finance", "gam", "helper", "human-escalator", "imessage", "lead-score", "lease-execute", "lease-explain", "market", "neon", "notes", "notion", "orchestrator", "quo", "quote", "resolve", "sandbox", "scrape", "ship", "storage", "tasks", "twilio", "viewport"]
+      "services": ["alchemist", "auth", "autoassist", "availability", "bluebubbles", "bridge-consent", "buyflow", "canon", "chatgpt", "ch1tty", "cleaner", "cloudflare", "dispatch", "dispute", "evidence", "finance", "gam", "helper", "human-escalator", "imessage", "lead-score", "lease-execute", "lease-explain", "market", "neon", "notes", "notion", "npm", "orchestrator", "quo", "quote", "resolve", "sandbox", "scrape", "ship", "storage", "tasks", "twilio", "viewport"]
     },
     "C_not_an_mcp_candidate": {
       "description": "React/UI worker (app.tsx, client.tsx) — not an MCP server. Excluded from the wrap loop.",
