@@ -183,6 +183,30 @@ an MCP-serving worker with zero entries at
 Implementation lives in `workers/shared/baseline-tools.ts` (chittyentity) —
 use it; do not hand-roll.
 
+## 3.7 ChatGPT surface conformance (binding for ChatGPT-exposed services)
+
+Per OpenAI MCP docs (verified 2026-07-13): ChatGPT connectors, deep research,
+and company knowledge only include servers implementing tools named exactly
+`search` and `fetch` (bare — another reason §3 bans service prefixes) with
+EXACT input signatures:
+
+- `search` — input `{ query: string }`
+- `fetch` — input `{ id: string }`
+
+Compatibility is checked on input parameters only, but return the recommended
+shapes so citations work: respond with `structuredContent` AND the same JSON
+string in `content[0].text`. Search: `{results:[{id,title,url}]}`. Fetch:
+`{id,title,text,url,metadata?}`. `url` must be an absolute user-openable
+http(s) URL (or empty — internal IDs belong in `id`, never `url`).
+
+Mark every other read-only tool `annotations: { readOnlyHint: true }`.
+
+Enforcement: mcp-builder `validate` gains a `chatgpt_surface` check — for any
+service tagged ChatGPT-exposed, verify search/fetch presence, exact input
+schemas, and readOnlyHint coverage. The `/chatgpt/mcp` gateway (ChittyConnect)
+serves tool schemas from the ChittySchema canonical store (§3.6), not upstream
+self-reports.
+
 ## 4. The McpAgent wrap (canonical template)
 
 There is **no shared `McpAgent` base class** in `workers/shared/` — `agents/mcp`
