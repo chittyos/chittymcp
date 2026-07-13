@@ -72,6 +72,18 @@ exactly once, where it belongs (the server name). A client connected directly
 to `<name>.chitty.cc/mcp` already knows which server it called, so bare names
 are still self-descriptive there.
 
+### Portal interop (CF MCP server portals — verified against CF docs 2026-07-13)
+- The portal surfaces tools/prompts as `{server_id}_{name}`, splitting on the
+  FIRST underscore — server IDs MUST use hyphens for multi-word names, never
+  underscores. Resources are not name-prefixed (the `<service>://` URI scheme
+  is the namespace).
+- `portal_` is reserved (portal-native tools) — never name a service `portal`.
+- JS-reserved verbs (`delete`) are safe: Code Mode sanitizes the NAMESPACED
+  name (`tasks_delete`), and since codemode v0.2.1 DynamicWorkerExecutor
+  sanitizes internally — do not hand-call `sanitizeToolName`.
+- Portal background-syncs upstream surfaces ~every 2h; allow for this when
+  verifying renames post-deploy.
+
 ### Verbs
 Canonical verbs (extend cautiously, document if new):
 `list, get, create, update, delete, claim, release, complete, fail, cancel,
