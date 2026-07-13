@@ -144,6 +144,33 @@ Cite canon ONCE at the module header of `prompts.ts` / `resources.ts`:
 ```
 Do NOT scatter P/L/T/E/A references into individual prompts.
 
+## 3.6 Baseline tools (binding — every service MCP)
+
+Every ChittyOS MCP server MUST expose these meta-tools, named exactly (bare,
+per §3):
+
+| Tool | Contract |
+|------|----------|
+| `status` | Returns `{service, version, status, deps?}` — the MCP mirror of the `/health` HTTP endpoint. Real-dependency probe, no mocks (§6). |
+| `describe` | Returns the service's full surface: `{service, version, canonical_uri, tools: [{name, description}], prompts: [...], resources: [...]}`. Self-documenting; the payload is the same shape POSTed to ChittySchema (below). |
+
+### Schema self-registration (binding)
+On deploy (or first `init()`), every service MUST register its tool surface
+with the canonical registry:
+
+```
+POST https://schema.chitty.cc/api/tools/register
+{ "server": "chittyagent-<name>", "name": "<bare_tool_name>",
+  "description": "...", "inputSchema": { ... } }
+```
+
+one POST per tool, bare names only (ChittySchema keys them
+`tool:chittyagent-<name>:<bare_name>`). The gatekeeper compliance check treats
+an MCP-serving worker with zero entries at
+`GET schema.chitty.cc/api/tools/chittyagent-<name>` as non-compliant.
+Implementation lives in `workers/shared/baseline-tools.ts` (chittyentity) —
+use it; do not hand-roll.
+
 ## 4. The McpAgent wrap (canonical template)
 
 There is **no shared `McpAgent` base class** in `workers/shared/` — `agents/mcp`
