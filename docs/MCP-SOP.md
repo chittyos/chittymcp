@@ -72,6 +72,18 @@ exactly once, where it belongs (the server name). A client connected directly
 to `<name>.chitty.cc/mcp` already knows which server it called, so bare names
 are still self-descriptive there.
 
+### Portal interop (CF MCP server portals — verified against CF docs 2026-07-13)
+- The portal surfaces tools/prompts as `{server_id}_{name}`, splitting on the
+  FIRST underscore — server IDs MUST use hyphens for multi-word names, never
+  underscores. Resources are not name-prefixed (the `<service>://` URI scheme
+  is the namespace).
+- `portal_` is reserved (portal-native tools) — never name a service `portal`.
+- JS-reserved verbs (`delete`) are safe: Code Mode sanitizes the NAMESPACED
+  name (`tasks_delete`), and since codemode v0.2.1 DynamicWorkerExecutor
+  sanitizes internally — do not hand-call `sanitizeToolName`.
+- Portal background-syncs upstream surfaces ~every 2h; allow for this when
+  verifying renames post-deploy.
+
 ### Verbs
 Canonical verbs (extend cautiously, document if new):
 `list, get, create, update, delete, claim, release, complete, fail, cancel,
@@ -143,6 +155,57 @@ Cite canon ONCE at the module header of `prompts.ts` / `resources.ts`:
 // @canonical-uri: chittycanon://core/services/chittyagent-<name>
 ```
 Do NOT scatter P/L/T/E/A references into individual prompts.
+
+## 3.6 Baseline tools (binding — every service MCP)
+
+Every ChittyOS MCP server MUST expose these meta-tools, named exactly (bare,
+per §3):
+
+| Tool | Contract |
+|------|----------|
+| `status` | Returns `{service, version, status, deps?}` — the MCP mirror of the `/health` HTTP endpoint. Real-dependency probe, no mocks (§6). |
+| `describe` | Returns the service's full surface: `{service, version, canonical_uri, tools: [{name, description}], prompts: [...], resources: [...]}`. Self-documenting; the payload is the same shape POSTed to ChittySchema (below). |
+
+### Schema self-registration (binding)
+On deploy (or first `init()`), every service MUST register its tool surface
+with the canonical registry:
+
+```
+POST https://schema.chitty.cc/api/tools/register
+{ "server": "chittyagent-<name>", "name": "<bare_tool_name>",
+  "description": "...", "inputSchema": { ... } }
+```
+
+one POST per tool, bare names only (ChittySchema keys them
+`tool:chittyagent-<name>:<bare_name>`). The gatekeeper compliance check treats
+an MCP-serving worker with zero entries at
+`GET schema.chitty.cc/api/tools/chittyagent-<name>` as non-compliant.
+Implementation lives in `workers/shared/baseline-tools.ts` (chittyentity) —
+use it; do not hand-roll.
+
+## 3.7 ChatGPT surface conformance (binding for ChatGPT-exposed services)
+
+Per OpenAI MCP docs (verified 2026-07-13): ChatGPT connectors, deep research,
+and company knowledge only include servers implementing tools named exactly
+`search` and `fetch` (bare — another reason §3 bans service prefixes) with
+EXACT input signatures:
+
+- `search` — input `{ query: string }`
+- `fetch` — input `{ id: string }`
+
+Compatibility is checked on input parameters only, but return the recommended
+shapes so citations work: respond with `structuredContent` AND the same JSON
+string in `content[0].text`. Search: `{results:[{id,title,url}]}`. Fetch:
+`{id,title,text,url,metadata?}`. `url` must be an absolute user-openable
+http(s) URL (or empty — internal IDs belong in `id`, never `url`).
+
+Mark every other read-only tool `annotations: { readOnlyHint: true }`.
+
+Enforcement: mcp-builder `validate` gains a `chatgpt_surface` check — for any
+service tagged ChatGPT-exposed, verify search/fetch presence, exact input
+schemas, and readOnlyHint coverage. The `/chatgpt/mcp` gateway (ChittyConnect)
+serves tool schemas from the ChittySchema canonical store (§3.6), not upstream
+self-reports.
 
 ## 4. The McpAgent wrap (canonical template)
 
