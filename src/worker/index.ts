@@ -59,6 +59,7 @@ interface Env {
   CLOUDFLARE_API_TOKEN?: string;
   CLOUDFLARE_ACCOUNT_ID?: string;
   CLOUDFLARE_ZONE_ID?: string;
+  CHITTY_AUTH_SERVICE_TOKEN?: string;
   CHITTYAUTH_ISSUED_MCP_ADMIN_TOKEN?: string;
   CHITTYREGISTER_POSTURE_URL?: string;
   CHITTYAUTH_ISSUED_REGISTER_TOKEN?: string;
@@ -608,6 +609,7 @@ async function discoverTools(
         headers: {
           "Content-Type": "application/json",
           "Accept": "application/json, text/event-stream",
+          "Authorization": env.CHITTY_AUTH_SERVICE_TOKEN ? `Bearer ${env.CHITTY_AUTH_SERVICE_TOKEN}` : "",
         },
         body: JSON.stringify({
           jsonrpc: "2.0",
@@ -631,6 +633,7 @@ async function discoverTools(
         headers: {
           "Content-Type": "application/json",
           "Accept": "application/json, text/event-stream",
+          "Authorization": env.CHITTY_AUTH_SERVICE_TOKEN ? `Bearer ${env.CHITTY_AUTH_SERVICE_TOKEN}` : "",
           "Mcp-Session-Id": sessionId,
         },
         body: JSON.stringify({
@@ -694,6 +697,7 @@ async function discoverMcpItems(
         headers: {
           "Content-Type": "application/json",
           "Accept": "application/json, text/event-stream",
+          "Authorization": env.CHITTY_AUTH_SERVICE_TOKEN ? `Bearer ${env.CHITTY_AUTH_SERVICE_TOKEN}` : "",
         },
         body: JSON.stringify({
           jsonrpc: "2.0",
@@ -717,6 +721,7 @@ async function discoverMcpItems(
         headers: {
           "Content-Type": "application/json",
           "Accept": "application/json, text/event-stream",
+          "Authorization": env.CHITTY_AUTH_SERVICE_TOKEN ? `Bearer ${env.CHITTY_AUTH_SERVICE_TOKEN}` : "",
           "Mcp-Session-Id": sessionId,
         },
         body: JSON.stringify({
@@ -785,6 +790,7 @@ async function forwardMcpCall(
       headers: {
         "Content-Type": "application/json",
         "Accept": "application/json, text/event-stream",
+          "Authorization": env.CHITTY_AUTH_SERVICE_TOKEN ? `Bearer ${env.CHITTY_AUTH_SERVICE_TOKEN}` : "",
       },
       body: JSON.stringify({
         jsonrpc: "2.0",
@@ -814,6 +820,7 @@ async function forwardMcpCall(
       headers: {
         "Content-Type": "application/json",
         "Accept": "application/json, text/event-stream",
+          "Authorization": env.CHITTY_AUTH_SERVICE_TOKEN ? `Bearer ${env.CHITTY_AUTH_SERVICE_TOKEN}` : "",
         "Mcp-Session-Id": sessionId,
       },
       body: JSON.stringify({
@@ -839,6 +846,7 @@ async function forwardToolCall(
       headers: {
         "Content-Type": "application/json",
         "Accept": "application/json, text/event-stream",
+          "Authorization": env.CHITTY_AUTH_SERVICE_TOKEN ? `Bearer ${env.CHITTY_AUTH_SERVICE_TOKEN}` : "",
       },
       body: JSON.stringify({
         jsonrpc: "2.0",
@@ -868,6 +876,7 @@ async function forwardToolCall(
       headers: {
         "Content-Type": "application/json",
         "Accept": "application/json, text/event-stream",
+          "Authorization": env.CHITTY_AUTH_SERVICE_TOKEN ? `Bearer ${env.CHITTY_AUTH_SERVICE_TOKEN}` : "",
         "Mcp-Session-Id": sessionId,
       },
       body: JSON.stringify({
@@ -1485,7 +1494,9 @@ export default {
         const service = env[svc.binding] as Fetcher;
         const newUrl = new URL(request.url);
         newUrl.pathname = path.slice(`/${prefix}`.length) || "/";
-        return service.fetch(new Request(newUrl.toString(), request));
+        const proxyReq = new Request(newUrl.toString(), request);
+        if (env.CHITTY_AUTH_SERVICE_TOKEN) proxyReq.headers.set("Authorization", `Bearer ${env.CHITTY_AUTH_SERVICE_TOKEN}`);
+        return service.fetch(proxyReq);
       }
     }
 
