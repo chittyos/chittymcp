@@ -59,7 +59,7 @@ interface Env {
   CLOUDFLARE_API_TOKEN?: string;
   CLOUDFLARE_ACCOUNT_ID?: string;
   CLOUDFLARE_ZONE_ID?: string;
-  CHITTY_AUTH_SERVICE_TOKEN?: string;
+  CHITTY_AUTH_SERVICE_TOKEN?: import("@cloudflare/workers-types").SecretsStoreSecret;
   CHITTYAUTH_ISSUED_MCP_ADMIN_TOKEN?: string;
   CHITTYREGISTER_POSTURE_URL?: string;
   CHITTYAUTH_ISSUED_REGISTER_TOKEN?: string;
@@ -601,6 +601,7 @@ function resolveToolService(
 async function discoverTools(
   service: Fetcher,
   serviceId: string,
+  chittyAuthToken: string,
 ): Promise<Array<{ name: string; description: string; inputSchema: unknown }>> {
   try {
     const initResp = await service.fetch(
@@ -609,7 +610,7 @@ async function discoverTools(
         headers: {
           "Content-Type": "application/json",
           "Accept": "application/json, text/event-stream",
-          "Authorization": env.CHITTY_AUTH_SERVICE_TOKEN ? `Bearer ${env.CHITTY_AUTH_SERVICE_TOKEN}` : "",
+          "Authorization": chittyAuthToken ? `Bearer ${chittyAuthToken}` : "",
         },
         body: JSON.stringify({
           jsonrpc: "2.0",
@@ -633,7 +634,7 @@ async function discoverTools(
         headers: {
           "Content-Type": "application/json",
           "Accept": "application/json, text/event-stream",
-          "Authorization": env.CHITTY_AUTH_SERVICE_TOKEN ? `Bearer ${env.CHITTY_AUTH_SERVICE_TOKEN}` : "",
+          "Authorization": chittyAuthToken ? `Bearer ${chittyAuthToken}` : "",
           "Mcp-Session-Id": sessionId,
         },
         body: JSON.stringify({
@@ -689,6 +690,7 @@ async function discoverMcpItems(
   serviceId: string,
   method: "prompts/list" | "resources/list",
   resultKey: "prompts" | "resources",
+  chittyAuthToken: string,
 ): Promise<unknown[]> {
   try {
     const initResp = await service.fetch(
@@ -697,7 +699,7 @@ async function discoverMcpItems(
         headers: {
           "Content-Type": "application/json",
           "Accept": "application/json, text/event-stream",
-          "Authorization": env.CHITTY_AUTH_SERVICE_TOKEN ? `Bearer ${env.CHITTY_AUTH_SERVICE_TOKEN}` : "",
+          "Authorization": chittyAuthToken ? `Bearer ${chittyAuthToken}` : "",
         },
         body: JSON.stringify({
           jsonrpc: "2.0",
@@ -721,7 +723,7 @@ async function discoverMcpItems(
         headers: {
           "Content-Type": "application/json",
           "Accept": "application/json, text/event-stream",
-          "Authorization": env.CHITTY_AUTH_SERVICE_TOKEN ? `Bearer ${env.CHITTY_AUTH_SERVICE_TOKEN}` : "",
+          "Authorization": chittyAuthToken ? `Bearer ${chittyAuthToken}` : "",
           "Mcp-Session-Id": sessionId,
         },
         body: JSON.stringify({
@@ -756,8 +758,9 @@ async function discoverMcpItems(
 async function discoverPrompts(
   service: Fetcher,
   serviceId: string,
+  chittyAuthToken: string,
 ): Promise<unknown[]> {
-  const items = await discoverMcpItems(service, serviceId, "prompts/list", "prompts");
+  const items = await discoverMcpItems(service, serviceId, "prompts/list", "prompts", chittyAuthToken);
   for (const p of items) {
     const name = (p as { name?: string })?.name;
     if (name) PROMPT_ROUTE_INDEX.set(name, serviceId);
@@ -768,8 +771,9 @@ async function discoverPrompts(
 async function discoverResources(
   service: Fetcher,
   serviceId: string,
+  chittyAuthToken: string,
 ): Promise<unknown[]> {
-  const items = await discoverMcpItems(service, serviceId, "resources/list", "resources");
+  const items = await discoverMcpItems(service, serviceId, "resources/list", "resources", chittyAuthToken);
   for (const r of items) {
     const uri = (r as { uri?: string })?.uri;
     if (uri) RESOURCE_ROUTE_INDEX.set(uri, serviceId);
@@ -783,6 +787,7 @@ async function forwardMcpCall(
   method: string,
   params: unknown,
   requestId: unknown,
+  chittyAuthToken: string,
 ): Promise<Response> {
   const initResp = await service.fetch(
     new Request("https://internal/mcp", {
@@ -790,7 +795,7 @@ async function forwardMcpCall(
       headers: {
         "Content-Type": "application/json",
         "Accept": "application/json, text/event-stream",
-          "Authorization": env.CHITTY_AUTH_SERVICE_TOKEN ? `Bearer ${env.CHITTY_AUTH_SERVICE_TOKEN}` : "",
+          "Authorization": chittyAuthToken ? `Bearer ${chittyAuthToken}` : "",
       },
       body: JSON.stringify({
         jsonrpc: "2.0",
@@ -820,7 +825,7 @@ async function forwardMcpCall(
       headers: {
         "Content-Type": "application/json",
         "Accept": "application/json, text/event-stream",
-          "Authorization": env.CHITTY_AUTH_SERVICE_TOKEN ? `Bearer ${env.CHITTY_AUTH_SERVICE_TOKEN}` : "",
+          "Authorization": chittyAuthToken ? `Bearer ${chittyAuthToken}` : "",
         "Mcp-Session-Id": sessionId,
       },
       body: JSON.stringify({
@@ -839,6 +844,7 @@ async function forwardToolCall(
   toolName: string,
   args: Record<string, unknown>,
   requestId: unknown,
+  chittyAuthToken: string,
 ): Promise<Response> {
   const initResp = await service.fetch(
     new Request("https://internal/mcp", {
@@ -846,7 +852,7 @@ async function forwardToolCall(
       headers: {
         "Content-Type": "application/json",
         "Accept": "application/json, text/event-stream",
-          "Authorization": env.CHITTY_AUTH_SERVICE_TOKEN ? `Bearer ${env.CHITTY_AUTH_SERVICE_TOKEN}` : "",
+          "Authorization": chittyAuthToken ? `Bearer ${chittyAuthToken}` : "",
       },
       body: JSON.stringify({
         jsonrpc: "2.0",
@@ -876,7 +882,7 @@ async function forwardToolCall(
       headers: {
         "Content-Type": "application/json",
         "Accept": "application/json, text/event-stream",
-          "Authorization": env.CHITTY_AUTH_SERVICE_TOKEN ? `Bearer ${env.CHITTY_AUTH_SERVICE_TOKEN}` : "",
+          "Authorization": chittyAuthToken ? `Bearer ${chittyAuthToken}` : "",
         "Mcp-Session-Id": sessionId,
       },
       body: JSON.stringify({
@@ -1250,6 +1256,13 @@ async function handleAdminBind(request: Request, env: Env): Promise<Response> {
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
+    let chittyAuthToken = "";
+    try {
+      if (env.CHITTY_AUTH_SERVICE_TOKEN) {
+        const val = await env.CHITTY_AUTH_SERVICE_TOKEN.get();
+        if (val) chittyAuthToken = val;
+      }
+    } catch (e) {}
     const url = new URL(request.url);
     let path = url.pathname;
 
@@ -1495,7 +1508,7 @@ export default {
         const newUrl = new URL(request.url);
         newUrl.pathname = path.slice(`/${prefix}`.length) || "/";
         const proxyReq = new Request(newUrl.toString(), request);
-        if (env.CHITTY_AUTH_SERVICE_TOKEN) proxyReq.headers.set("Authorization", `Bearer ${env.CHITTY_AUTH_SERVICE_TOKEN}`);
+        if (chittyAuthToken) proxyReq.headers.set("Authorization", `Bearer ${chittyAuthToken}`);
         return service.fetch(proxyReq);
       }
     }
@@ -1548,7 +1561,7 @@ export default {
         const allTools = (await Promise.all(
           Object.entries(serviceMap).map(async ([id, svc]) => {
             const service = env[svc.binding] as Fetcher;
-            return discoverTools(service, id);
+            return discoverTools(service, id, chittyAuthToken);
           }),
         )).flat();
         const cursor = typeof body.params?.cursor === "string" ? body.params.cursor : null;
@@ -1572,14 +1585,14 @@ export default {
           const [sid, ...rest] = toolName.split("/");
           const svc = serviceMap[sid];
           if (svc) {
-            return forwardToolCall(env[svc.binding] as Fetcher, rest.join("/"), body.params?.arguments || {}, body.id);
+            return forwardToolCall(env[svc.binding] as Fetcher, rest.join("/"), body.params?.arguments || {}, body.id, chittyAuthToken);
           }
         }
         let serviceId = resolveToolService(toolName, serviceMap);
         if (!serviceId) {
           // Cold isolate with empty index — repopulate via a discovery sweep.
           await Promise.all(Object.entries(serviceMap).map(([id, svc]) =>
-            discoverTools(env[svc.binding] as Fetcher, id)));
+            discoverTools(env[svc.binding] as Fetcher, id, chittyAuthToken)));
           serviceId = resolveToolService(toolName, serviceMap);
         }
         if (!serviceId) {
@@ -1590,12 +1603,7 @@ export default {
           });
         }
         const svc = serviceMap[serviceId];
-        return forwardToolCall(
-          env[svc.binding] as Fetcher,
-          toolName,
-          body.params?.arguments || {},
-          body.id,
-        );
+        return forwardToolCall(env[svc.binding] as Fetcher, toolName, body.params?.arguments || {}, body.id, chittyAuthToken);
       }
 
       // Aggregate prompts/list across all bound services. Pass-through naming
@@ -1606,7 +1614,7 @@ export default {
         const PAGE_SIZE = 50;
         const allPrompts = (await Promise.all(
           Object.entries(serviceMap).map(([id, svc]) =>
-            discoverPrompts(env[svc.binding] as Fetcher, id),
+            discoverPrompts(env[svc.binding] as Fetcher, id, chittyAuthToken),
           ),
         )).flat();
         const cursor = typeof body.params?.cursor === "string" ? body.params.cursor : null;
@@ -1625,7 +1633,7 @@ export default {
         if (!serviceId || !serviceMap[serviceId]) {
           // Cold isolate — repopulate index via a discovery sweep.
           await Promise.all(Object.entries(serviceMap).map(([id, svc]) =>
-            discoverPrompts(env[svc.binding] as Fetcher, id)));
+            discoverPrompts(env[svc.binding] as Fetcher, id, chittyAuthToken)));
           serviceId = PROMPT_ROUTE_INDEX.get(promptName) || null;
         }
         if (!serviceId) {
@@ -1636,12 +1644,7 @@ export default {
           });
         }
         const svc = serviceMap[serviceId];
-        return forwardMcpCall(
-          env[svc.binding] as Fetcher,
-          "prompts/get",
-          body.params,
-          body.id,
-        );
+        return forwardMcpCall(env[svc.binding] as Fetcher, "prompts/get", body.params, body.id, chittyAuthToken);
       }
 
       // Aggregate resources/list across all bound services. Resources carry
@@ -1651,7 +1654,7 @@ export default {
         const PAGE_SIZE = 50;
         const allResources = (await Promise.all(
           Object.entries(serviceMap).map(([id, svc]) =>
-            discoverResources(env[svc.binding] as Fetcher, id),
+            discoverResources(env[svc.binding] as Fetcher, id, chittyAuthToken),
           ),
         )).flat();
         const cursor = typeof body.params?.cursor === "string" ? body.params.cursor : null;
@@ -1669,7 +1672,7 @@ export default {
         let serviceId = RESOURCE_ROUTE_INDEX.get(uri) || null;
         if (!serviceId || !serviceMap[serviceId]) {
           await Promise.all(Object.entries(serviceMap).map(([id, svc]) =>
-            discoverResources(env[svc.binding] as Fetcher, id)));
+            discoverResources(env[svc.binding] as Fetcher, id, chittyAuthToken)));
           serviceId = RESOURCE_ROUTE_INDEX.get(uri) || null;
         }
         if (!serviceId) {
@@ -1680,12 +1683,7 @@ export default {
           });
         }
         const svc = serviceMap[serviceId];
-        return forwardMcpCall(
-          env[svc.binding] as Fetcher,
-          "resources/read",
-          body.params,
-          body.id,
-        );
+        return forwardMcpCall(env[svc.binding] as Fetcher, "resources/read", body.params, body.id, chittyAuthToken);
       }
 
       // resources/templates/list — clients may call this to discover URI
