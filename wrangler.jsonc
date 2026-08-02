@@ -19,7 +19,12 @@
   //   mcp.chitty.cc/<name>/mcp       → proxied directly to chittyagent-<name>
   //   mcp.chitty.cc/v0.1/servers     → MCP-spec discovery
   //
-  // Source of truth for membership: docs/agent-registry-triage.json (Bucket A).
+  // Registry of record for membership: ChittyRegistry (registry.chitty.cc).
+  // These service bindings are a GENERATED PROJECTION of the ChittyRegistry
+  // manifest — not a source of truth themselves. docs/agent-registry-triage.json
+  // is a generated triage snapshot, likewise not authoritative. Membership
+  // changes land here only via a reviewed PR (POST /admin/bind opens exactly
+  // that PR on a deploy beacon — never a runtime mutation).
   // Services not yet deployed (Bucket C) are intentionally NOT bound — re-add when live.
   "services": [
     { "binding": "SVC_AI",           "service": "chittyagent-ai" },

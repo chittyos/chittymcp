@@ -4,18 +4,22 @@
 - **Tier**: 2 (Platform / Aggregator)
 - **Organization**: CHITTYOS
 - **Domain**: MCP Aggregation
-- **Role**: Universal MCP aggregator over all CF-gateway-registered service MCPs
+- **Role**: Universal MCP aggregator over the ChittyOS service MCPs (membership is a compile-time projection of ChittyRegistry)
 
 ## Mission
 
-ChittyMCP is the **universal MCP aggregator** for the ChittyOS ecosystem. Individual
-service MCPs are registered in the Cloudflare gateway as the source of truth; ChittyMCP
-federates them under a single canonical endpoint (`mcp.chitty.cc`) so any MCP client
-(Claude, ChatGPT, agents, IDEs) gets one URL and discovers the full surface.
+ChittyMCP is the **universal MCP aggregator** for the ChittyOS ecosystem. **ChittyRegistry
+(registry.chitty.cc) is the registry of record** for service membership; ChittyMCP's
+membership is a **compile-time generated projection** of that registry (`SERVICE_MAP` +
+`VIEW_CATEGORIES` + wrangler `services[]` bindings). ChittyMCP federates the services
+under a single canonical endpoint (`mcp.chitty.cc`) so any MCP client (Claude, ChatGPT,
+agents, IDEs) gets one URL and discovers the full surface.
 
 ## Aggregator Topology
 
-CF Gateway is the registry of record. Three aggregators consume it:
+**ChittyRegistry is the registry of record.** Three aggregators consume generated
+projections of it (the Cloudflare gateway performs edge auth/routing but is **not** the
+membership authority):
 
 | Aggregator | Endpoint | Surface | Audience | Auth |
 |------------|----------|---------|----------|------|
@@ -59,15 +63,15 @@ for the live binding list.
 ## Scope
 
 ### IS Responsible For
-- Federating CF-registered service MCPs under `mcp.chitty.cc`
+- Federating the projected service MCPs under `mcp.chitty.cc`
 - Routing `/{name}/mcp` requests to the bound service worker
-- Membership enforcement (tag + policy filter)
+- Membership enforcement (category filter over the compile-time `SERVICE_MAP` projection — no runtime membership read)
 - Exposing the official MCP `/v0.1/servers` discovery endpoint
 - Health / observability surface for the aggregator itself
 
 ### IS NOT Responsible For
 - Tool implementation (lives in each `chittyagent-*` service)
-- Service registration (CF gateway + ChittyRegistry)
+- Service registration (ChittyRegistry — the registry of record)
 - Identity / token issuance (ChittyID, ChittyAuth)
 - OAuth gating (that is ch1tty's job)
 - Persistent state for tool calls (each upstream owns its state)
@@ -76,8 +80,8 @@ for the live binding list.
 
 | Type | Service | Purpose |
 |------|---------|---------|
-| Source of truth | Cloudflare gateway | Service MCP registration |
-| Peer | ChittyRegistry | Canonical service catalog (`/v0.1/servers`) |
+| Registry of record | ChittyRegistry | Canonical service catalog; membership projected to `SERVICE_MAP` + wrangler bindings at build time |
+| Edge | Cloudflare Access / gateway | Per-service auth + routing (NOT the membership authority) |
 | Peer | chittymsg | Messaging-domain aggregator |
 | Peer | ch1tty | OAuth-protected smart gateway |
 | Upstream (bindings) | chittyagent-dispute, chittyagent-notes, chittyagent-ship, chittystorage, chittyrouter, chittycommand, chittyregistry, chittyconnect, chittyagent-ch1tty | Federated MCP backends |
@@ -90,7 +94,7 @@ Live binding set: see `wrangler.jsonc → services[]`.
 - [x] Single wrangler config (`wrangler.jsonc`)
 - [x] Tail consumer wired to `chittytrack`
 - [x] Routes `mcp.chitty.cc/*` to consolidated worker (`src/worker/index.ts`)
-- [ ] All upstream services declare tags at CF gateway registration
+- [ ] All upstream services registered in ChittyRegistry (membership projected into `SERVICE_MAP` + wrangler bindings)
 - [ ] `/v0.1/servers` discovery endpoint live
 - [ ] Per-aggregator policy filter implemented in `src/worker/`
 - [ ] Legacy directories (`mcp-evidence-server`, `mcp-unified-consolidated`, `chittyos-*-mcp`, `mcp-chittyconnect`, `mcp-handler.js`, etc.) removed or moved to `archive/`
