@@ -6,6 +6,10 @@
   "compatibility_flags": ["nodejs_compat"],
   "account_id": "0bc21e3a5a9de1a4cc843be9c3e98121",
   "observability": { "enabled": true },
+  "secrets_store_secrets": [
+    { "binding": "CHITTY_AUTH_SERVICE_TOKEN", "store_id": "e914522471964c3c8cf1e601770edcc3", "secret_name": "chitty_auth_service_token" }
+  ],
+
   "tail_consumers": [{ "service": "chittytrack" }],
 
   "routes": [
@@ -22,6 +26,8 @@
   // Source of truth for membership: docs/agent-registry-triage.json (Bucket A).
   // Services not yet deployed (Bucket C) are intentionally NOT bound — re-add when live.
   "services": [
+        // Auth sidecar — ADR-000 Decision 2
+        { "binding": "CHITTYAUTH", "service": "chittyauth", "entrypoint": "ChittyAuthService" },
     { "binding": "SVC_AI",           "service": "chittyagent-ai" },
     { "binding": "SVC_ALCHEMIST",    "service": "chittyagent-alchemist" },
     { "binding": "SVC_AUTH",         "service": "chittyagent-auth" },
