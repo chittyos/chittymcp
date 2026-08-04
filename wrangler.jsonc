@@ -26,6 +26,8 @@
   // Source of truth for membership: docs/agent-registry-triage.json (Bucket A).
   // Services not yet deployed (Bucket C) are intentionally NOT bound — re-add when live.
   "services": [
+        // Auth sidecar — ADR-000 Decision 2
+        { "binding": "CHITTYAUTH", "service": "chittyauth", "entrypoint": "ChittyAuthService" },
     { "binding": "SVC_AI",           "service": "chittyagent-ai" },
     { "binding": "SVC_ALCHEMIST",    "service": "chittyagent-alchemist" },
     { "binding": "SVC_AUTH",         "service": "chittyagent-auth" },
