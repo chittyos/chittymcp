@@ -17,4 +17,4 @@ last_reviewed: "2026-05-26"
 - **Secrets Management:** All secrets flow through 1Password into the Cloudflare secrets store. Secrets are never hardcoded in the repository.
 
 ## Policy Enforcement
-Per-aggregator policy is enforced by reading tags from the Cloudflare gateway registration and mapped via `VIEW_CATEGORIES` in `src/worker/index.ts`.
+Per-aggregator policy is enforced at **compile time**: each service's `category` in `SERVICE_MAP` is mapped to a sub-view via `VIEW_CATEGORIES` in `src/worker/index.ts`. Both are **generated projections** of the ChittyRegistry manifest (the registry of record) — not a runtime read of Cloudflare gateway or KV state. There is no runtime membership store, so no request can be served against a stale or divergent service list.
