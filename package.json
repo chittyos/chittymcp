@@ -36,7 +36,7 @@
     "fs-extra": "^11.4.0",
     "jose": "^6.2.9",
     "node-fetch": "^3.3.2",
-    "pg": "^8.22.0"
+    "pg": "^8.23.0"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260621.1",
