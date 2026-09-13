@@ -24,13 +24,13 @@
   "author": "ChittyOS",
   "license": "MIT",
   "dependencies": {
-    "hono": "^4.0.0",
+    "hono": "^4.12.34",
     "@neondatabase/serverless": "^0.10.1"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20240208.0",
-    "wrangler": "^4.46.0",
-    "vitest": "^4.0.8",
+    "wrangler": "^4.123.0",
+    "vitest": "^4.1.0",
     "eslint": "^8.56.0"
   },
   "engines": {
