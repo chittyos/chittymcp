@@ -20,7 +20,7 @@ lives in each `chittyagent-<name>` worker (separate repo:
 | `CHARTER.md`                  | Aggregator topology + scope                 |
 | `docs/MCP-SOP.md`             | **Canonical SOP for adding/wrapping any service MCP** |
 | `docs/ONBOARDING.md`          | Step-by-step add-to-aggregator procedure    |
-| `docs/agent-registry-triage.json` | Live triage of which services are deployed |
+| `docs/agent-registry-triage.json` | Generated triage snapshot of deployment status (NOT authoritative — ChittyRegistry is the registry of record) |
 | `wrangler.jsonc`              | Live service-binding list                   |
 | `src/worker/index.ts`         | The aggregator itself (353 LOC, data-driven)|
 

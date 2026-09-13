@@ -55,14 +55,11 @@ interface Env {
   // Comma-separated allowlist of CF Access service-token client IDs permitted
   // to reach the MCP surface. Set via `wrangler secret put MCP_ALLOWED_ACCESS_CLIENT_IDS`.
   MCP_ALLOWED_ACCESS_CLIENT_IDS?: string;
-  MCP_REGISTRY?: KVNamespace;
   CLOUDFLARE_API_TOKEN?: string;
   CLOUDFLARE_ACCOUNT_ID?: string;
   CLOUDFLARE_ZONE_ID?: string;
   CHITTY_AUTH_SERVICE_TOKEN?: import("@cloudflare/workers-types").SecretsStoreSecret;
   CHITTYAUTH_ISSUED_MCP_ADMIN_TOKEN?: string;
-  CHITTYREGISTER_POSTURE_URL?: string;
-  CHITTYAUTH_ISSUED_REGISTER_TOKEN?: string;
   // Cloudflare Access Application Audience tag for mcp.chitty.cc — when
   // present, JWT verification requires this aud claim. Optional but
   // recommended for production.
@@ -92,21 +89,23 @@ interface ServiceEntry {
   // /msg/mcp = communication). Reuses the `category` vocabulary from
   // ch1tty servers.json (finance, communication, platform, …) — NOT the
   // CHARTER's `domain:` tag, which was only ever documented, never enforced.
-  // Defaults to "platform" when a dynamic entry omits it.
+  // Set at compile time on every SERVICE_MAP entry (a generated projection of
+  // the ChittyRegistry manifest) — never read from a runtime store.
   category: string;
 }
 
-interface DynamicServiceEntry {
-  id: string;
-  sub: string;
-  binding: BindingKey;
-  label: string;
-  category?: string;
-  enabled?: boolean;
-  posture?: string;
-  trust_score?: number;
-}
-
+// Membership authority (governance correction, 2026-08): COMPILE-TIME ONLY.
+//
+//   ChittyRegistry (registry of record)
+//     → generated manifest
+//       → SERVICE_MAP + VIEW_CATEGORIES + wrangler.jsonc service bindings
+//
+// SERVICE_MAP, VIEW_CATEGORIES and the wrangler `services[]` bindings are
+// GENERATED PROJECTIONS of that manifest — not sources of truth themselves.
+// Membership changes ONLY by editing these projections in a reviewed PR (which
+// POST /admin/bind opens on a deploy beacon — see handleAdminBind). There is no
+// runtime KV/posture read: a request never learns the service list from a
+// mutable store, so it can never silently serve a stale or divergent membership.
 const SERVICE_MAP: Record<string, ServiceEntry> = {
   ai:               { binding: "SVC_AI",               label: "AI Gateway (chittyclaw)",            category: "platform" },
   alchemist:        { binding: "SVC_ALCHEMIST",        label: "Alchemist (telemetry + entity graph)", category: "platform" },
@@ -157,8 +156,6 @@ const VIEW_CATEGORIES: Record<string, string> = {
   msg: "communication",  // ChittyMsg — messaging/comms surface
 };
 
-const MCP_REGISTRY_KEY = "services:v1";
-
 // Allowlist of CF Access service-token client IDs permitted to reach the MCP
 // surface. CF Access service tokens are (client_id, secret) pairs; the secret
 // is 64 chars of unguessable cryptographic material. We trust a request whose
@@ -190,102 +187,15 @@ function requireAdmin(request: Request, env: Env): Response | null {
   return null;
 }
 
-function isEligibleByPosture(entry: DynamicServiceEntry): boolean {
-  if (entry.enabled === false) return false;
-  const posture = (entry.posture || "unknown").toLowerCase();
-  const trust = entry.trust_score ?? 0;
-  const postureAllowed = posture === "trusted" || posture === "verified" || posture === "certified";
-  return postureAllowed || trust >= 70;
-}
-
-async function loadActiveServices(env: Env): Promise<Record<string, ServiceEntry>> {
-  const fallback = SERVICE_MAP;
-  if (!env.MCP_REGISTRY) return fallback;
-
-  try {
-    const raw = await env.MCP_REGISTRY.get(MCP_REGISTRY_KEY);
-    if (!raw) return fallback;
-    const parsed = JSON.parse(raw) as DynamicServiceEntry[];
-    const active: Record<string, ServiceEntry> = {};
-    for (const entry of parsed) {
-      if (!entry?.id || !entry?.sub || !entry?.binding || !entry?.label) continue;
-      if (!isEligibleByPosture(entry)) continue;
-      active[entry.sub] = {
-        binding: entry.binding,
-        label: entry.label,
-        category: entry.category || SERVICE_MAP[entry.sub]?.category || "platform",
-      };
-    }
-    return Object.keys(active).length > 0 ? active : fallback;
-  } catch (err) {
-    console.error(`[ChittyMCP] Failed to load dynamic service map: ${err}`);
-    return fallback;
-  }
-}
-
-type PostureFetchResult =
-  | { status: "ok"; services: DynamicServiceEntry[] }
-  | { status: "not_configured" }
-  | { status: "fetch_failed"; error: string };
-
-async function fetchPostureRegistry(env: Env): Promise<PostureFetchResult> {
-  const url = env.CHITTYREGISTER_POSTURE_URL;
-  if (!url) return { status: "not_configured" };
-  const headers: Record<string, string> = { "content-type": "application/json" };
-  if (env.CHITTYAUTH_ISSUED_REGISTER_TOKEN) {
-    headers.authorization = `Bearer ${env.CHITTYAUTH_ISSUED_REGISTER_TOKEN}`;
-  }
-  let res: Response;
-  try {
-    res = await fetch(url, { method: "GET", headers });
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error(`[posture] fetch threw url=${url} err=${msg}`);
-    return { status: "fetch_failed", error: `network: ${msg}` };
-  }
-  if (!res.ok) {
-    console.error(`[posture] fetch non-2xx url=${url} status=${res.status}`);
-    return { status: "fetch_failed", error: `http ${res.status}` };
-  }
-  let payload: { services?: DynamicServiceEntry[] };
-  try {
-    payload = await res.json() as { services?: DynamicServiceEntry[] };
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error(`[posture] non-JSON body url=${url} err=${msg}`);
-    return { status: "fetch_failed", error: `parse: ${msg}` };
-  }
-  if (!Array.isArray(payload.services)) {
-    return { status: "fetch_failed", error: "payload.services not an array" };
-  }
-  return { status: "ok", services: payload.services };
-}
-
-type SyncResult =
-  | { status: "synced"; count: number }
-  | { status: "no_kv" }
-  | { status: "fetch_failed"; error: string }
-  | { status: "empty" }
-  | { status: "kv_write_failed"; count: number; error: string };
-
-async function syncRegistryFromPosture(env: Env): Promise<SyncResult> {
-  if (!env.MCP_REGISTRY) return { status: "no_kv" };
-  const result = await fetchPostureRegistry(env);
-  if (result.status !== "ok") {
-    return result.status === "not_configured"
-      ? { status: "fetch_failed", error: "CHITTYREGISTER_POSTURE_URL not set" }
-      : { status: "fetch_failed", error: result.error };
-  }
-  if (result.services.length === 0) return { status: "empty" };
-  try {
-    await env.MCP_REGISTRY.put(MCP_REGISTRY_KEY, JSON.stringify(result.services));
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error(`[posture] KV write failed err=${msg}`);
-    return { status: "kv_write_failed", count: result.services.length, error: msg };
-  }
-  return { status: "synced", count: result.services.length };
-}
+// The former RUNTIME membership path — isEligibleByPosture / loadActiveServices /
+// fetchPostureRegistry / syncRegistryFromPosture, backed by an MCP_REGISTRY KV
+// namespace populated from CHITTYREGISTER_POSTURE_URL — has been REMOVED. It let
+// a runtime KV read override the reviewed, compile-time membership, and on any
+// miss (no KV, empty key, parse/fetch failure) it fell back SILENTLY to a stale
+// snapshot or the static map. Membership is now SERVICE_MAP only, with no
+// fallback path to diverge from (see the authority-chain note above SERVICE_MAP).
+// POST /admin/bind proposes membership changes as a reviewable PR, never a
+// runtime mutation (see handleAdminBind).
 
 class CfApiError extends Error {
   status: number;
@@ -965,7 +875,7 @@ function patchWorkerIndex(source: string, sub: string, bindingName: string, labe
   // Re-key the entry with proper "key:" form. The padEnd above gave us
   // "<sub>             " — append a colon at the right spot.
   // Simpler: rebuild the inserted line cleanly.
-  const cleanEntry = `  ${sub}: { binding: "${bindingName}", label: ${JSON.stringify(label)} },\n`;
+  const cleanEntry = `  ${sub}: { binding: "${bindingName}", label: ${JSON.stringify(label)}, category: "platform" },\n`;
   patched = patched.replace(entry, cleanEntry);
 
   return patched;
@@ -1430,8 +1340,10 @@ export default {
       }
     }
 
-    // Everything below depends on the active (posture-filtered) service map.
-    let serviceMap = await loadActiveServices(env);
+    // Everything below operates over the compile-time membership (SERVICE_MAP),
+    // the sole authority. Shallow-copy so the sub-view filter below can narrow
+    // it per request without mutating the module-level projection.
+    let serviceMap: Record<string, ServiceEntry> = { ...SERVICE_MAP };
 
     // Aggregate sub-view rewrite: a POST to /{view}/mcp (cpa, msg, …) narrows
     // the map to the services whose `category` matches that view, then rewrites
@@ -1469,7 +1381,7 @@ export default {
       if (deny) return deny;
       return Response.json({
         service: "chittymcp",
-        source: env.MCP_REGISTRY ? "dynamic-or-fallback" : "static",
+        source: "compile-time",
         services: Object.fromEntries(
           Object.entries(serviceMap).map(([id, s]) => [id, { path: `/${id}/mcp`, label: s.label }]),
         ),
@@ -1480,15 +1392,6 @@ export default {
     // so chittyagent-* workers can call it without holding admin credentials.
     if (request.method === "POST" && path === "/admin/bind") {
       return handleAdminBind(request, env);
-    }
-
-    if (request.method === "POST" && path === "/admin/registry/sync") {
-      const deny = requireAdmin(request, env);
-      if (deny) return deny;
-      const result = await syncRegistryFromPosture(env);
-      const ok = result.status === "synced";
-      const status = ok ? 200 : 502;
-      return Response.json({ ok, ...result }, { status });
     }
 
     if (request.method === "POST" && path === "/admin/reconcile/routes") {

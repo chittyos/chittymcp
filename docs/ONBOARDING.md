@@ -8,8 +8,9 @@ gate before the next.
 
 ```
        ┌────────────────────────────────────────────────────┐
-       │  Cloudflare gateway  (registry of record)          │
-       │  Each chittyagent-* registers its MCP + tags here  │
+       │  ChittyRegistry  (registry of record)              │
+       │  Canonical catalog → generated manifest → compile- │
+       │  time projection (SERVICE_MAP + wrangler bindings) │
        └────────────────────────────────────────────────────┘
                               │
         ┌─────────────────────┼─────────────────────┐
@@ -19,8 +20,11 @@ gate before the next.
                                               AND auth:oauth-ok)
 ```
 
-Aggregators read from the gateway by tag + policy. **You never edit aggregator
-configs to add a service** — you tag the service correctly and it shows up.
+Aggregator membership is a **compile-time projection** of ChittyRegistry into
+`SERVICE_MAP` + wrangler `services[]` bindings. You add a service by landing a
+**reviewed PR** that edits those projections — the `/admin/bind` deploy beacon
+opens exactly that PR automatically. It is never a runtime tag flip, and there
+is no KV/posture fallback that could serve a divergent membership.
 
 ## Step 1 — Build the service MCP
 
@@ -49,8 +53,9 @@ Register the service MCP through the gateway with the canonical tag set:
 | `auth` | yes | `service-binding`, `token`, `oauth-ok` |
 | `tier` | recommended | `0`–`5` per ChittyOS tier model |
 
-The gateway registration is the source of truth. ChittyRegistry mirrors it via
-`/v0.1/servers`.
+ChittyRegistry (registry.chitty.cc) is the registry of record; the aggregator
+surfaces a compile-time projection of it via `/v0.1/servers`. The gateway tags
+are edge auth/routing metadata, not the membership authority.
 
 **Gate:** `curl https://registry.chitty.cc/v0.1/servers | jq '.[] | select(.name=="<service>")'`
 returns your entry with tags.

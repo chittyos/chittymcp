@@ -11,19 +11,28 @@
 ## 1. Topology (binding)
 
 ```
-   CF Gateway  ── registry of record (per-service registration + tags)
+   ChittyRegistry  ── registry of record (canonical service catalog)
         │
-        ├──► chittymcp   (mcp.chitty.cc)        — all services, machine surface
-        ├──► chittymsg   (msg.chitty.cc)        — domain:messaging only
-        └──► ch1tty      (ch1tty.chitty.cc)     — audience:human ∧ auth:oauth-ok
+        └─► generated manifest ──► compile-time projection into each aggregator
+              (SERVICE_MAP + VIEW_CATEGORIES + wrangler service bindings)
+                 │
+                 ├──► chittymcp   (mcp.chitty.cc)        — all services, machine surface
+                 ├──► chittymsg   (msg.chitty.cc)        — category:communication only
+                 └──► ch1tty      (ch1tty.chitty.cc)     — audience:human ∧ auth:oauth-ok
 ```
+
+> The Cloudflare gateway performs edge auth/routing; it is **not** the registry
+> of record. Aggregator membership is the compile-time projection above, not a
+> runtime read of gateway or KV state.
 
 - Service MCPs are **not** exposed directly to end clients. They are reached
   through one of the three aggregators (or future focused collections).
 - Per-service Cloudflare Access policies remain for ops/debugging, but client
   routing is always through an aggregator.
-- Adding a service to an aggregator is **never** a hand edit on the aggregator
-  side — it is a tag at registration time.
+- Adding a service to chittymcp is a **reviewed edit to the generated projection**
+  (`SERVICE_MAP` + wrangler `services[]`), landed via PR — the `/admin/bind` deploy
+  beacon opens exactly that PR. It is **never** a runtime mutation, and there is no
+  KV/posture fallback that could serve a divergent membership.
 
 ## 2. Required elements (every service MCP)
 
