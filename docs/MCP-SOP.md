@@ -8,22 +8,43 @@
 
 ---
 
-## 1. Topology (binding)
+## 1. Topology and authority (binding)
 
 ```
-   CF Gateway  ── registry of record (per-service registration + tags)
+ChittyCanon / ChittySchema
+   ontology + validation
         │
-        ├──► chittymcp   (mcp.chitty.cc)        — all services, machine surface
-        ├──► chittymsg   (msg.chitty.cc)        — domain:messaging only
-        └──► ch1tty      (ch1tty.chitty.cc)     — audience:human ∧ auth:oauth-ok
+        ▼
+ChittyRegister
+   admission + lifecycle mutation
+        │
+        ▼
+ChittyRegistry
+   enumeration / discoverable state
+        │
+        ▼
+Generated deployment projection
+        │
+        ├──► chittymcp   (mcp.chitty.cc)        — broad machine federation
+        ├──► chittymsg   (msg.chitty.cc)        — focused messaging projection
+        ├──► ch1tty      (ch1tty.chitty.cc)     — slim human/OAuth projection
+        └──► Cloudflare managed MCP surfaces    — deployed projection where approved
 ```
 
-- Service MCPs are **not** exposed directly to end clients. They are reached
-  through one of the three aggregators (or future focused collections).
-- Per-service Cloudflare Access policies remain for ops/debugging, but client
-  routing is always through an aggregator.
-- Adding a service to an aggregator is **never** a hand edit on the aggregator
-  side — it is a tag at registration time.
+- **Cloudflare is deployed state, not the registry of record.** Gateways and portals
+  consume/reconcile admitted ChittyRegister/ChittyRegistry state and MUST NOT become
+  independent admission or lifecycle authorities.
+- Every service MCP retains a canonical service endpoint for operations, liveness,
+  MCP Inspector, and controlled verification. The default route follows the governing
+  path-first taxonomy (`agent.chitty.cc/{name}/mcp`); a dedicated
+  `{name}.chitty.cc/mcp` custom domain is an allowed exception only when justified.
+- Normal end-client routing SHOULD use the appropriate aggregate/portal projection.
+  Direct client use of a service endpoint is allowed only when the service explicitly
+  declares that projection and its auth/isolation model is verified.
+- Aggregator membership is generated or reconciled from canonical Registry state.
+  `servers.json`, Wrangler Service Bindings, runtime service maps, view maps, and
+  Cloudflare Portal membership are executable projections, not membership authorities.
+  Manual edits are recovery-only drift repair and MUST converge back to generated state.
 
 ## 2. Required elements (every service MCP)
 
@@ -68,9 +89,10 @@ therefore triples the service token end-to-end — e.g. `quo_send_message`
 federated through chittymsg and surfaced via the Chitty_Msg connector becomes
 `Chitty_Msg__chittyagent-quo_quo_send_message` ("quo" ×3). Bare `send_message`
 renders as `Chitty_Msg__chittyagent-quo_send_message` — the service appears
-exactly once, where it belongs (the server name). A client connected directly
-to `<name>.chitty.cc/mcp` already knows which server it called, so bare names
-are still self-descriptive there.
+exactly once, where it belongs (the server name). A controlled ops/verification client connected directly
+to the canonical service MCP route already knows which server it called, so bare names
+remain self-descriptive there. Normal product clients SHOULD use the governed
+aggregate/portal projection unless direct exposure is explicitly declared.
 
 ### Verbs
 Canonical verbs (extend cautiously, document if new):
