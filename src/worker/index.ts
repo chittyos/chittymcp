@@ -448,8 +448,11 @@ async function requireBearerTokenAsync(request: Request, env: Env): Promise<Resp
   const ua = request.headers.get("user-agent") || "";
 
   if (cfJwt) {
-    console.log(`[auth] ${reqUrl} accepted=cf-access-header ua=${ua.slice(0, 60)}`);
-    return null;
+    if (await verifyCfAccessJwt(cfJwt, env)) {
+      console.log(`[auth] ${reqUrl} accepted=cf-access-jwt ua=${ua.slice(0, 60)}`);
+      return null;
+    }
+    console.log(`[auth] ${reqUrl} REJECTED invalid-cf-access-jwt ua=${ua.slice(0, 60)}`);
   }
 
   // CF Access service token headers — /mcp is bypassed in CF Access so the
