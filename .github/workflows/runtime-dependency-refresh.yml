@@ -1,0 +1,37 @@
+name: Runtime Dependency Refresh
+
+on:
+  pull_request:
+    branches: [ main ]
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    if: github.head_ref == 'fix/runtime-dependency-audit'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Refresh production dependency lock
+        run: npm audit fix --package-lock-only --omit=dev
+      - name: Verify production audit
+        run: npm audit --audit-level=high --omit=dev
+      - name: Commit refreshed lockfile
+        run: |
+          if git diff --quiet -- package-lock.json package.json; then
+            echo "No dependency metadata changes required."
+            exit 0
+          fi
+          git config user.name "chitty-dependency-bot"
+          git config user.email "chitty-dependency-bot@users.noreply.github.com"
+          git add package-lock.json package.json
+          git commit -m "fix(deps): refresh production audit fixes"
+          git push origin HEAD:${{ github.head_ref }}
