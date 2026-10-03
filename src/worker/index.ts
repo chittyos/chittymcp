@@ -629,17 +629,18 @@ async function discoverTools(
     );
 
     const sessionId = initResp.headers.get("mcp-session-id");
-    if (!sessionId) return [];
+
+    const listHeaders: Record<string, string> = {
+      "Content-Type": "application/json",
+      "Accept": "application/json, text/event-stream",
+      "Authorization": chittyAuthToken ? `Bearer ${chittyAuthToken}` : "",
+    };
+    if (sessionId) listHeaders["Mcp-Session-Id"] = sessionId;
 
     const listResp = await service.fetch(
       new Request("https://internal/mcp", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Accept": "application/json, text/event-stream",
-          "Authorization": chittyAuthToken ? `Bearer ${chittyAuthToken}` : "",
-          "Mcp-Session-Id": sessionId,
-        },
+        headers: listHeaders,
         body: JSON.stringify({
           jsonrpc: "2.0",
           method: "tools/list",
@@ -718,17 +719,18 @@ async function discoverMcpItems(
     );
 
     const sessionId = initResp.headers.get("mcp-session-id");
-    if (!sessionId) return [];
+
+    const listHeaders: Record<string, string> = {
+      "Content-Type": "application/json",
+      "Accept": "application/json, text/event-stream",
+      "Authorization": chittyAuthToken ? `Bearer ${chittyAuthToken}` : "",
+    };
+    if (sessionId) listHeaders["Mcp-Session-Id"] = sessionId;
 
     const listResp = await service.fetch(
       new Request("https://internal/mcp", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Accept": "application/json, text/event-stream",
-          "Authorization": chittyAuthToken ? `Bearer ${chittyAuthToken}` : "",
-          "Mcp-Session-Id": sessionId,
-        },
+        headers: listHeaders,
         body: JSON.stringify({
           jsonrpc: "2.0",
           method,
@@ -814,23 +816,17 @@ async function forwardMcpCall(
   );
 
   const sessionId = initResp.headers.get("mcp-session-id");
-  if (!sessionId) {
-    return sseResponse({
-      jsonrpc: "2.0",
-      id: requestId,
-      error: { code: -32000, message: "Failed to establish backend session" },
-    });
-  }
+  const callHeaders: Record<string, string> = {
+    "Content-Type": "application/json",
+    "Accept": "application/json, text/event-stream",
+    "Authorization": chittyAuthToken ? `Bearer ${chittyAuthToken}` : "",
+  };
+  if (sessionId) callHeaders["Mcp-Session-Id"] = sessionId;
 
   return service.fetch(
     new Request("https://internal/mcp", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Accept": "application/json, text/event-stream",
-          "Authorization": chittyAuthToken ? `Bearer ${chittyAuthToken}` : "",
-        "Mcp-Session-Id": sessionId,
-      },
+      headers: callHeaders,
       body: JSON.stringify({
         jsonrpc: "2.0",
         method,
@@ -871,23 +867,17 @@ async function forwardToolCall(
   );
 
   const sessionId = initResp.headers.get("mcp-session-id");
-  if (!sessionId) {
-    return sseResponse({
-      jsonrpc: "2.0",
-      id: requestId,
-      error: { code: -32000, message: "Failed to establish backend session" },
-    });
-  }
+  const callHeaders: Record<string, string> = {
+    "Content-Type": "application/json",
+    "Accept": "application/json, text/event-stream",
+    "Authorization": chittyAuthToken ? `Bearer ${chittyAuthToken}` : "",
+  };
+  if (sessionId) callHeaders["Mcp-Session-Id"] = sessionId;
 
   return service.fetch(
     new Request("https://internal/mcp", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Accept": "application/json, text/event-stream",
-          "Authorization": chittyAuthToken ? `Bearer ${chittyAuthToken}` : "",
-        "Mcp-Session-Id": sessionId,
-      },
+      headers: callHeaders,
       body: JSON.stringify({
         jsonrpc: "2.0",
         method: "tools/call",
