@@ -159,3 +159,28 @@ describe('ChittyMCP upstream transport compatibility', () => {
     );
   });
 });
+
+describe('Cloudflare managed MCP hostname ownership', () => {
+  const config = readFileSync(resolve(__dirname, '../wrangler.jsonc'), 'utf8');
+  const worker = readFileSync(resolve(__dirname, '../src/worker/index.ts'), 'utf8');
+  const start = worker.indexOf('async function reconcileRoutes(');
+  const end = worker.indexOf('function corsHeaders()', start);
+  const reconciler = worker.slice(start, end);
+
+  it('does not bind the native mcp.chitty.cc portal to a Worker', () => {
+    assert.doesNotMatch(config, /"pattern":\s*"mcp\.chitty\.cc\/\*"/);
+    assert.match(config, /"pattern":\s*"mcp-aggregator\.chitty\.cc\/\*"/);
+  });
+
+  it('does not recreate managed portal routes during route reconciliation', () => {
+    assert.ok(start >= 0 && end > start, 'route reconciler must be discoverable');
+    assert.doesNotMatch(reconciler, /mcp\.chitty\.cc\//);
+    assert.match(reconciler, /mcp-aggregator\.chitty\.cc\/mcp\*/);
+    assert.match(reconciler, /r\.pattern\.startsWith\("mcp-aggregator\.chitty\.cc\/"\)/);
+  });
+
+  it('advertises only the internal hostname from the legacy Worker', () => {
+    assert.match(worker, /const SELF = "https:\/\/mcp-aggregator\.chitty\.cc"/);
+    assert.doesNotMatch(worker, /const SELF = "https:\/\/mcp\.chitty\.cc"/);
+  });
+});
