@@ -1,107 +1,83 @@
 # ChittyMCP Charter
 
 ## Classification
-- **Tier**: 2 (Platform / Aggregator)
+- **Tier**: 2 (Platform / internal MCP aggregator)
 - **Organization**: CHITTYOS
-- **Domain**: MCP Aggregation
-- **Role**: Universal MCP aggregator over all CF-gateway-registered service MCPs
+- **Canonical service**: `chittycanon://core/services/chittymcp`
+- **Runtime host**: `mcp-aggregator.chitty.cc` (legacy Worker projection)
+- **Public MCP host**: `mcp.chitty.cc` — Cloudflare **managed** MCP Portal, **not** served by this Worker.
 
-## Mission
+## Decision and ownership (2026-10-11)
 
-ChittyMCP is the **universal MCP aggregator** for the ChittyOS ecosystem. Individual
-service MCPs are registered in the Cloudflare gateway as the source of truth; ChittyMCP
-federates them under a single canonical endpoint (`mcp.chitty.cc`) so any MCP client
-(Claude, ChatGPT, agents, IDEs) gets one URL and discovers the full surface.
+**The operator's authoritative decision is that `https://mcp.chitty.cc/mcp`
+is a Cloudflare-managed native MCP Portal** (`chitty-mcp`, ChittyCorp Cloudflare account).
+Cloudflare Access manages external OAuth, portal session authentication,
+federation, tool/prompt exposure, and portal-level policies. This repository
+MUST NOT claim that hostname in Worker routes, DNS, public OAuth metadata,
+auto-binding, or route reconciliation.
 
-## Aggregator Topology
+- **ChittyRegister/Neon** owns governed service-registration records.
+- **ChittyRegistry** owns service discovery/catalog projections.
+- **ChittyCanon** owns ontology and canonical identity/URI conventions.
+- **Cloudflare One** owns the deployed native MCP servers and role portals.
+- **ChittyEntity** owns governed agent implementation projections, not their identity class/ontology.
+- **This repository** owns only its legacy service-binding aggregator and internal routing logic.
 
-CF Gateway is the registry of record. Three aggregators consume it:
+The existing smart slim-MCP at `mcp.ch1tty.com` is a separate capability,
+not an alias to the managed native portal.
 
-| Aggregator | Endpoint | Surface | Audience | Auth |
-|------------|----------|---------|----------|------|
-| **chittymcp** (this repo) | `/mcp` | All services / all tools | Machines, agents, devs | Service-binding / token |
-| **chittycpa** | `/cpa/mcp` | `category:finance` MCPs (finance; +future stripe/quickbooks/plaid) | Finance / accounting surfaces | Token |
-| **chittymsg** | `/msg/mcp` | `category:communication` MCPs (quo, twilio, imessage, bluebubbles, notes, dispute, autoassist) | Comms surfaces | Token |
-| **ch1tty** | (separate gateway) | Smart / AI gateway, curated subset | Humans, portal | OAuth |
+## Legacy aggregation (isolated)
 
-### Membership (category-based aggregate sub-views)
+The legacy Worker remains bound, where configured, to
+`https://mcp-aggregator.chitty.cc`, not `mcp.chitty.cc`.
 
-Each service entry in `SERVICE_MAP` (src/worker/index.ts) carries a `category`
-(`finance`, `communication`, `platform`, `infra`, `legal`, …), reusing the
-`category` vocabulary from ch1tty `servers.json`. A POST to `/{view}/mcp`
-federates only the services whose category matches the view's category, then
-runs the identical aggregate pipeline (initialize / tools/list / tools/call /
-prompts / resources) over that filtered set.
+| Endpoint | Purpose |
+|---|---|
+| `/mcp` | Internal legacy tool federation |
+| `/{service}/mcp` | Service-binding proxy for explicitly bound agents |
+| `/v0.1/servers` | Legacy Worker discovery (not Cloudflare portal discovery) |
+| `/cpa/mcp` | Legacy `category:finance` view |
+| `/msg/mcp` | Legacy `category:communication` view |
+| `/health` | Worker liveness |
 
-- **chittymcp** (`/mcp`): every bound service (no filter)
-- **chittycpa** (`/cpa/mcp`): `category === "finance"`
-- **chittymsg** (`/msg/mcp`): `category === "communication"`
+The legacy category views **do not** substitute for role-specific Cloudflare
+managed portals. A missing category fails closed. None of these endpoints
+should be advertised as paths under the native managed portal.
 
-View → category mapping lives in `VIEW_CATEGORIES` (src/worker/index.ts). New
-services join a view automatically by declaring the matching `category`; an
-empty filtered set fails CLOSED (zero tools, not the full surface). View names
-never shadow a real service id — a service named like a view wins the route.
+## Route governance
 
-> NOTE (2026-06): Prior versions of this charter described `domain:`/`surface:`
-> tag filters. Those were **documentation-only and never enforced** in the
-> worker. The category-based sub-views above are the real, implemented
-> mechanism that replaces them.
+- The Worker config may include `mcp-aggregator.chitty.cc/*`.
+- The Worker config **must not** include `mcp.chitty.cc/*`.
+- `POST /admin/reconcile/routes` may reconcile **only legacy-owned routes**;
+  it must never create, modify, or delete the managed portal's routes.
+- A change to managed portal DNS, Access, membership, OAuth, or policy goes
+  through Cloudflare's native MCP/Access APIs and an audited reversible plan.
+- Never weaken Access or hardcode credentials to mask an authentication defect.
+  Credentials are brokered at runtime through ChittyConnect/ChittySecrets.
+- Cloudflare portal `Ready` reports a successful capability sync, not proof
+  of authorized tool invocation. Validate via MCP Inspector and client calls.
+- Keep legal/evidence capabilities in the Legal trust domain.
 
-## Endpoint Convention
+## Existing infrastructure
 
-```
-mcp.chitty.cc/{service-name}/mcp  →  chittyagent-{service-name}
-```
+- Main native portal: `chitty-mcp` at `mcp.chitty.cc`.
+- Legacy Worker: `chittymcp` at `mcp-aggregator.chitty.cc`.
+- Source file: `src/worker/index.ts`; bindings: `wrangler.jsonc`.
+- Runtime membership authority must not be inferred from historical static
+  `SERVICE_MAP` entries or an old triage snapshot.
 
-Routed via Cloudflare service bindings (no HTTP round-trips). See `wrangler.jsonc`
-for the live binding list.
+## Compliance and verification
 
-## Scope
-
-### IS Responsible For
-- Federating CF-registered service MCPs under `mcp.chitty.cc`
-- Routing `/{name}/mcp` requests to the bound service worker
-- Membership enforcement (tag + policy filter)
-- Exposing the official MCP `/v0.1/servers` discovery endpoint
-- Health / observability surface for the aggregator itself
-
-### IS NOT Responsible For
-- Tool implementation (lives in each `chittyagent-*` service)
-- Service registration (CF gateway + ChittyRegistry)
-- Identity / token issuance (ChittyID, ChittyAuth)
-- OAuth gating (that is ch1tty's job)
-- Persistent state for tool calls (each upstream owns its state)
-
-## Dependencies
-
-| Type | Service | Purpose |
-|------|---------|---------|
-| Source of truth | Cloudflare gateway | Service MCP registration |
-| Peer | ChittyRegistry | Canonical service catalog (`/v0.1/servers`) |
-| Peer | chittymsg | Messaging-domain aggregator |
-| Peer | ch1tty | OAuth-protected smart gateway |
-| Upstream (bindings) | chittyagent-dispute, chittyagent-notes, chittyagent-ship, chittystorage, chittyrouter, chittycommand, chittyregistry, chittyconnect, chittyagent-ch1tty | Federated MCP backends |
-
-Live binding set: see `wrangler.jsonc → services[]`.
-
-## Compliance
-
-- [x] CLAUDE.md present
-- [x] Single wrangler config (`wrangler.jsonc`)
-- [x] Tail consumer wired to `chittytrack`
-- [x] Routes `mcp.chitty.cc/*` to consolidated worker (`src/worker/index.ts`)
-- [ ] All upstream services declare tags at CF gateway registration
-- [ ] `/v0.1/servers` discovery endpoint live
-- [ ] Per-aggregator policy filter implemented in `src/worker/`
-- [ ] Legacy directories (`mcp-evidence-server`, `mcp-unified-consolidated`, `chittyos-*-mcp`, `mcp-chittyconnect`, `mcp-handler.js`, etc.) removed or moved to `archive/`
+Before promotion, compare managed portal API state, Worker routes, custom
+domains, proxied DNS, Access apps/policies, registry records, service
+authentication, and individual `tools/list` plus prompts/resources.
+A legacy health 200 or registry status `active` is insufficient to certify
+a functional public MCP connection.
 
 ## Ownership
-
-| Role | Owner |
-|------|-------|
-| Service Owner | ChittyOS |
-| Technical Lead | @chittyos-infrastructure |
-| Contact | mcp@chitty.cc |
+- **Service owner**: ChittyOS
+- **Technical lead**: @chittyos-infrastructure
+- **Contact**: mcp@chitty.cc
 
 ---
-*Charter Version: 2.0.0 | Last Updated: 2026-05-26*
+*Charter version 2.1.0 — source correction; not evidence of production deployment.*

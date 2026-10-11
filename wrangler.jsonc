@@ -13,16 +13,19 @@
   "tail_consumers": [{ "service": "chittytrack" }],
 
   "routes": [
-    { "pattern": "mcp.chitty.cc/*", "zone_name": "chitty.cc" },
     { "pattern": "mcp-aggregator.chitty.cc/*", "zone_name": "chitty.cc" }
   ],
 
   // Service bindings — every chittyagent-* worker confirmed live at
   // <name>.agent.chitty.cc/mcp (HTTP 302 = Cloudflare Access challenge = route exists).
-  // Aggregated namespace at mcp.chitty.cc:
-  //   mcp.chitty.cc/mcp              → tools/list, tools/call (all services, namespaced)
-  //   mcp.chitty.cc/<name>/mcp       → proxied directly to chittyagent-<name>
-  //   mcp.chitty.cc/v0.1/servers     → MCP-spec discovery
+  // mcp.chitty.cc is a Cloudflare-managed native MCP Portal (portal id: chitty-mcp).
+  // Never bind this Worker to that hostname; Cloudflare owns DNS, Access, OAuth,
+  // portal/server membership, tool and prompt exposure for the public endpoint.
+  //
+  // Legacy service-binding aggregation is confined to mcp-aggregator.chitty.cc:
+  //   mcp-aggregator.chitty.cc/mcp          → legacy aggregate MCP
+  //   mcp-aggregator.chitty.cc/<name>/mcp   → direct service-binding proxy
+  //   mcp-aggregator.chitty.cc/v0.1/servers → legacy discovery
   //
   // Source of truth for membership: docs/agent-registry-triage.json (Bucket A).
   // Services not yet deployed (Bucket C) are intentionally NOT bound — re-add when live.
