@@ -1,0 +1,62 @@
+name: MCP patched-lock refresh (one-shot)
+on:
+  push:
+    branches:
+      - fix/cloudflare-managed-mcp-host-ownership-20261011
+    paths:
+      - .github/workflows/mcp-security-lock-refresh.yml
+permissions:
+  contents: write
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Regenerate lock from patched dependency policy
+        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+      - name: Verify patched lock versions
+        run: |
+          node --input-type=module <<'NODE'
+          import { readFileSync } from 'node:fs';
+          const j=JSON.parse(readFileSync('package-lock.json','utf8'));
+          const checks=[
+            ['node_modules/@modelcontextprotocol/sdk', [1,31,0]],
+            ['node_modules/@modelcontextprotocol/client', [2,2,0]],
+            ['node_modules/@modelcontextprotocol/core', [2,2,0]],
+            ['node_modules/proxy-addr', [2,0,8]],
+          ];
+          for (const [name, min] of checks) {
+            const version=j.packages?.[name]?.version;
+            if (!version) throw new Error('Missing lockfile entry: '+name);
+            const nums=version.split('.').map(Number);
+            if (nums[0]!==min[0] || (nums[1]*1000+nums[2])<(min[1]*1000+min[2])) {
+              throw new Error('Vulnerable lockfile version: '+name+'@'+version);
+            }
+            console.log(name+'@'+version);
+          }
+          NODE
+      - name: Upload inspectable lockfile artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: patched-mcp-lockfile
+          path: package-lock.json
+          retention-days: 7
+      - name: Commit lockfile on this remediation branch only
+        run: |
+          git add package-lock.json
+          git diff --cached --check
+          if ! git diff --cached --quiet; then
+            git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'fix(deps): regenerate lock for patched MCP and proxy dependencies'
+            git push origin HEAD:refs/heads/fix/cloudflare-managed-mcp-host-ownership-20261011
+          fi
+      - name: Validate production dependency advisory gate
+        run: |
+          npm ci --ignore-scripts --no-fund
+          npm audit --omit=dev --audit-level=high
