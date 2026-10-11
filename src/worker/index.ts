@@ -1,12 +1,14 @@
 /**
  * ChittyMCP — MCP Aggregator Worker
  *
- * Serves mcp.chitty.cc — collects all ChittyOS service MCP endpoints
- * into one surface via service bindings (no HTTP round-trips).
+ * Internal legacy service-binding aggregator at mcp-aggregator.chitty.cc.
+ * Public mcp.chitty.cc is the Cloudflare-managed native MCP Portal.
+ * This Worker must never create, own, or advertise public portal routes.
+ * Aggregates service MCP endpoints via service bindings (no HTTP round-trips).
  *
- *   mcp.chitty.cc/mcp           → aggregated (all tools, namespaced)
- *   mcp.chitty.cc/dispute/mcp   → proxied to chittyagent-dispute
- *   mcp.chitty.cc/notes/mcp     → proxied to chittyagent-notes
+ *   mcp-aggregator.chitty.cc/mcp           → aggregated (all tools, namespaced)
+ *   mcp-aggregator.chitty.cc/dispute/mcp   → proxied to chittyagent-dispute
+ *   mcp-aggregator.chitty.cc/notes/mcp     → proxied to chittyagent-notes
  *   etc.
  */
 
@@ -63,7 +65,7 @@ interface Env {
   CHITTYAUTH_ISSUED_MCP_ADMIN_TOKEN?: string;
   CHITTYREGISTER_POSTURE_URL?: string;
   CHITTYAUTH_ISSUED_REGISTER_TOKEN?: string;
-  // Cloudflare Access Application Audience tag for mcp.chitty.cc — when
+  // Cloudflare Access Application Audience tag for mcp-aggregator.chitty.cc — when
   // present, JWT verification requires this aud claim. Optional but
   // recommended for production.
   CF_ACCESS_AUD?: string;
@@ -166,7 +168,7 @@ const MCP_REGISTRY_KEY = "services:v1";
 // (the secret's unguessability is the actual auth factor; the allowlist scopes
 // WHICH issued tokens may use this surface). Set as a wrangler secret,
 // comma-separated. This replaces the previous self-referential HEAD-probe to
-// mcp.chitty.cc, which looped a subrequest back into this same worker and
+// mcp-aggregator.chitty.cc, which looped a subrequest back into this same worker and
 // stalled the MCP session with zero bytes until the client timed out.
 function allowedAccessClientIds(env: Env): Set<string> {
   return new Set(
@@ -350,12 +352,12 @@ async function reconcileRoutes(env: Env, serviceMap: Record<string, ServiceEntry
     { method: "GET" },
   );
 
-  const desiredPatterns = new Set<string>(["mcp.chitty.cc/mcp*"]);
+  const desiredPatterns = new Set<string>(["mcp-aggregator.chitty.cc/mcp*"]);
   for (const sub of Object.keys(serviceMap)) {
-    desiredPatterns.add(`mcp.chitty.cc/${sub}/mcp*`);
+    desiredPatterns.add(`mcp-aggregator.chitty.cc/${sub}/mcp*`);
   }
 
-  const existingForScript = existing.filter((r) => r.script === script && r.pattern.startsWith("mcp.chitty.cc/"));
+  const existingForScript = existing.filter((r) => r.script === script && r.pattern.startsWith("mcp-aggregator.chitty.cc/"));
   const existingPatterns = new Set(existingForScript.map((r) => r.pattern));
 
   const created: string[] = [];
@@ -458,7 +460,7 @@ async function requireBearerTokenAsync(request: Request, env: Env): Promise<Resp
   // CF Access service token headers — /mcp is bypassed in CF Access so the
   // edge doesn't validate them. Validate against an operator-managed
   // allowlist of permitted client IDs (no network call). The previous
-  // implementation HEAD-probed mcp.chitty.cc/admin/* to ask CF Access — but
+  // implementation HEAD-probed mcp-aggregator.chitty.cc/admin/* to ask CF Access — but
   // that route is served by THIS worker, so the subrequest looped back into
   // itself and Cloudflare stalled it, hanging the MCP session with zero bytes
   // until the client timed out. CF Access's team-domain get-identity endpoint
@@ -491,7 +493,7 @@ async function requireBearerTokenAsync(request: Request, env: Env): Promise<Resp
     console.log(`[auth] ${reqUrl} REJECTED jwt-verify-failed bearer_kind=${bearerKind} ua=${ua.slice(0, 60)}`);
   } else if (bearer && bearer.startsWith("oauth:")) {
     // Custom 'oauth:'-prefixed opaque bearer. The previous implementation
-    // validated this by HEAD-probing mcp.chitty.cc/admin/* — the same
+    // validated this by HEAD-probing mcp-aggregator.chitty.cc/admin/* — the same
     // self-referential subrequest loop that stalled the service-token branch.
     // No real ChittyOS caller sends an 'oauth:'-prefixed bearer (legitimate
     // CF Access OAuth flows return JWT-form bearers, handled by the JWT verify
@@ -507,7 +509,7 @@ async function requireBearerTokenAsync(request: Request, env: Env): Promise<Resp
   const wwwAuth =
     'Bearer realm="chittymcp", error="invalid_token", ' +
     'error_description="Missing or invalid access token", ' +
-    'resource_metadata="https://mcp.chitty.cc/.well-known/oauth-protected-resource/mcp"';
+    'resource_metadata="https://mcp-aggregator.chitty.cc/.well-known/oauth-protected-resource/mcp"';
   return new Response(
     JSON.stringify({ jsonrpc: "2.0", id: null, error: { code: -32001, message: "unauthorized" } }),
     {
@@ -544,7 +546,7 @@ function requireBearerToken(request: Request, env: Env): Response | null {
     const wwwAuth =
       'Bearer realm="chittymcp", error="invalid_token", ' +
       'error_description="Missing or invalid access token", ' +
-      'resource_metadata="https://mcp.chitty.cc/.well-known/oauth-protected-resource/mcp"';
+      'resource_metadata="https://mcp-aggregator.chitty.cc/.well-known/oauth-protected-resource/mcp"';
     return new Response(
       JSON.stringify({
         jsonrpc: "2.0",
@@ -1220,7 +1222,7 @@ async function handleAdminBind(request: Request, env: Env): Promise<Response> {
     `- \`${bindingName}: Fetcher\` to \`Env\`\n` +
     `- \`${sub}\` entry to \`SERVICE_MAP\`\n` +
     `- \`{ binding: "${bindingName}", service: "${payload.service}" }\` to \`wrangler.jsonc\` services[]\n\n` +
-    `Once merged + deployed, aggregator surfaces tools at \`mcp.chitty.cc/${sub}/mcp\`.`;
+    `Once merged + deployed, aggregator surfaces tools at \`mcp-aggregator.chitty.cc/${sub}/mcp\`.`;
   const openPr = await ghFetch(token, `/repos/${repo}/pulls`, {
     method: "POST",
     body: JSON.stringify({
@@ -1286,7 +1288,7 @@ export default {
           category: s.category || "ecosystem",
           transport: "streamable-http",
           endpoints: {
-            aggregated: `https://mcp.chitty.cc/${id}/mcp`,
+            aggregated: `https://mcp-aggregator.chitty.cc/${id}/mcp`,
             canonical: `https://${id}.chitty.cc/mcp`,
           },
         })),
@@ -1297,34 +1299,17 @@ export default {
     }
 
     // OAuth 2.0 Protected Resource metadata (RFC 9728). Empirically the
-    // mcp-type Application at mcp.chitty.cc does NOT publish per-app DCR at
-    // /register (it returns 401 with the current policy set). The team-level
-    // OAuth server at chittycorp.cloudflareaccess.com DOES support public DCR.
-    // Per-app OAuth Provider — matches mcp.ch1tty.com pattern. Worker hosts
-    // OAuth endpoints at the resource hostname (https://mcp.chitty.cc/*) and
-    // proxies the actual handshake to Cloudflare Access OAuth. MCP clients
-    // (Claude.ai, ChatGPT) that require AS-equals-resource binding then
-    // accept this server.
+    // Legacy, internal ChittyMCP Worker. The public mcp.chitty.cc is the
+    // Cloudflare-managed MCP portal and MUST NOT be routed to this Worker.
+    // Keep protected-resource metadata and discovery host-bound to the legacy
+    // mcp-aggregator.chitty.cc hostname; do not advertise managed portal paths.
+    // Historical Cloudflare Access/team-domain OAuth behavior requires a
+    // separate authenticated MCP Inspector verification before client use.
     const TEAM = "https://chittycorp.cloudflareaccess.com";
-    const SELF = "https://mcp.chitty.cc";
+    const SELF = "https://mcp-aggregator.chitty.cc";
 
-    // RFC 9728 §3.1: clients derive the protected-resource metadata URL by
-    // inserting the resource's PATH into the well-known prefix. For an MCP
-    // server advertised as https://mcp.chitty.cc/mcp, Claude.ai fetches
-    // /.well-known/oauth-protected-resource/mcp — NOT the bare root. Serve the
-    // metadata for the root prefix AND any path suffix so path-scoped discovery
-    // resolves (200) instead of 404.
-    //
-    // Authorization server: this host fronts a Cloudflare Access `mcp_portal`
-    // app, which shadows the worker's OAuth endpoints at the edge and routes
-    // the OAuth handshake to the CF Access team domain (verified live: root
-    // AS-metadata issuer = chittycorp.cloudflareaccess.com; DCR to the team
-    // domain returns 201). Advertising SELF as the AS would send clients to
-    // mcp.chitty.cc/.well-known/oauth-authorization-server, whose edge-served
-    // issuer is the team domain — an RFC 8414 §3.3 issuer mismatch that breaks
-    // the connector. So advertise the team domain as the authorization server.
-    // (On hosts WITHOUT mcp_portal, e.g. mcp.ch1tty.com, the worker serves its
-    // own OAuth endpoints and SELF is correct there — this host differs.)
+    // RFC 9728: path-qualified protected-resource metadata must match the
+    // legacy resource host actually serving this Worker.
     if (
       request.method === "GET" &&
       (path === "/.well-known/oauth-protected-resource" ||
@@ -1508,7 +1493,7 @@ export default {
 
     // Aggregated MCP at /mcp (auth-gated)
     // Treat `/` (no path) the same as `/mcp` for POST — some MCP clients
-    // (Claude.ai connector when user enters `mcp.chitty.cc` without trailing
+    // (Claude.ai connector when user enters `mcp-aggregator.chitty.cc` without trailing
     // `/mcp`) post the JSON-RPC body directly to root. Without this, the
     // connector probes root, gets the service-index JSON, fails to find
     // MCP tools, and reports "There was a problem connecting".
