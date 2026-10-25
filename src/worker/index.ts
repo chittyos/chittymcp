@@ -11,7 +11,11 @@
  */
 
 import {
+  accessJwksForTest,
+  audiencesFromClaims,
   buildProxyRequest,
+  gatewayPrincipal,
+  isGatewayTarget,
   principalFromAccessClaims,
   refusedNoPrincipal,
   upstreamAuthHeaders,
@@ -64,6 +68,9 @@ interface Env {
   // Comma-separated allowlist of CF Access service-token client IDs permitted
   // to reach the MCP surface. Set via `wrangler secret put MCP_ALLOWED_ACCESS_CLIENT_IDS`.
   MCP_ALLOWED_ACCESS_CLIENT_IDS?: string;
+  // Comma-separated Access application AUD tags whose JWTs may name a
+  // principal for gateway-entrypoint agents. Empty/unset → refuse. Plain var.
+  GATEWAY_ACCESS_AUDS?: string;
   MCP_REGISTRY?: KVNamespace;
   CLOUDFLARE_API_TOKEN?: string;
   CLOUDFLARE_ACCOUNT_ID?: string;
@@ -103,11 +110,6 @@ interface ServiceEntry {
   // CHARTER's `domain:` tag, which was only ever documented, never enforced.
   // Defaults to "platform" when a dynamic entry omits it.
   category: string;
-  // Bound to the agent's named entrypoint `Gateway`: chittymcp forwards the
-  // authenticated caller (X-Chitty-Caller / X-Chitty-Via) instead of its own
-  // service token, and refuses the call when no principal was resolved.
-  // See src/worker/gateway.ts. Opt-in per service.
-  gateway?: boolean;
 }
 
 interface DynamicServiceEntry {
@@ -160,7 +162,7 @@ const SERVICE_MAP: Record<string, ServiceEntry> = {
   "human-escalator":{ binding: "SVC_HUMAN_ESCALATOR",  label: "Human Escalator",                    category: "communication" },
   "mcp-builder":    { binding: "SVC_MCP_BUILDER",      label: "MCP Builder",                        category: "devops" },
   schema:           { binding: "SVC_SCHEMA",           label: "Schema registry and drift audit",    category: "governance" },
-  olmec:            { binding: "SVC_OLMEC",            label: "Olmec (gauntlet adversarial review)", category: "devops", gateway: true },
+  olmec:            { binding: "SVC_OLMEC",            label: "Olmec (gauntlet adversarial review)", category: "devops" },
 };
 
 // Aggregate sub-views: a POST to /{view}/mcp federates only the services whose
@@ -229,9 +231,8 @@ async function loadActiveServices(env: Env): Promise<Record<string, ServiceEntry
         binding: entry.binding,
         label: entry.label,
         category: entry.category || SERVICE_MAP[entry.sub]?.category || "platform",
-        // Gateway opt-in is code-owned (the binding's entrypoint lives in
-        // wrangler.jsonc), never taken from the KV registry.
-        gateway: SERVICE_MAP[entry.sub]?.gateway,
+        // Gateway handling is decided from the binding name (GATEWAY_BINDINGS
+        // in gateway.ts), so no KV entry can opt a binding in or out.
       };
     }
     return Object.keys(active).length > 0 ? active : fallback;
@@ -441,14 +442,17 @@ async function verifyCfAccessJwt(token: string, env: Env): Promise<Record<string
     if (!cfAccessJwks) {
       cfAccessJwks = createRemoteJWKSet(new URL("https://chittycorp.cloudflareaccess.com/cdn-cgi/access/certs"));
     }
+    const keys = accessJwksForTest() ?? cfAccessJwks;
     // Verify signature + issuer only. CF Access OAuth issues tokens whose
     // `aud` claim is the DCR-registered client_id (e.g. Claude.ai's
     // registration), NOT the mcp-type app's AUD. Enforcing CF_ACCESS_AUD
     // here would falsely reject all OAuth-flow Bearer tokens from clients
     // like Claude.ai's MCP connector. The mcp-type app's policy gate at
     // CF Access already enforces app-level authorization upstream.
-    const { payload } = await jwtVerify(token, cfAccessJwks, { issuer: "https://chittycorp.cloudflareaccess.com" });
-    // CF_ACCESS_AUD intentionally NOT enforced — see comment above.
+    const { payload } = await jwtVerify(token, keys, { issuer: "https://chittycorp.cloudflareaccess.com" });
+    // CF_ACCESS_AUD intentionally NOT enforced here — see comment above. The
+    // gateway-forwarding paths enforce GATEWAY_ACCESS_AUDS on the returned
+    // `aud` instead (gatewayPrincipal in gateway.ts).
     void env;
     return payload as Record<string, unknown>;
   } catch {
@@ -463,6 +467,8 @@ async function verifyCfAccessJwt(token: string, env: Env): Promise<Record<string
 interface EdgeAuth {
   error: Response | null;
   principal: string | null;
+  // Verified Access JWT `aud` values ([] for non-JWT credentials).
+  aud: string[];
 }
 
 async function requireBearerTokenAsync(request: Request, env: Env): Promise<EdgeAuth> {
@@ -478,7 +484,7 @@ async function requireBearerTokenAsync(request: Request, env: Env): Promise<Edge
     const claims = await verifyCfAccessJwt(cfJwt, env);
     if (claims) {
       console.log(`[auth] ${reqUrl} accepted=cf-access-jwt ua=${ua.slice(0, 60)}`);
-      return { error: null, principal: principalFromAccessClaims(claims) };
+      return { error: null, principal: principalFromAccessClaims(claims), aud: audiencesFromClaims(claims) };
     }
     console.log(`[auth] ${reqUrl} REJECTED invalid-cf-access-jwt ua=${ua.slice(0, 60)}`);
   }
@@ -500,7 +506,7 @@ async function requireBearerTokenAsync(request: Request, env: Env): Promise<Edge
       console.log(`[auth] ${reqUrl} REJECTED svc-token-no-allowlist ua=${ua.slice(0, 60)}`);
     } else if (allowed.has(svcId)) {
       console.log(`[auth] ${reqUrl} accepted=cf-access-service-token ua=${ua.slice(0, 60)}`);
-      return { error: null, principal: null };
+      return { error: null, principal: null, aud: [] };
     } else {
       console.log(`[auth] ${reqUrl} REJECTED svc-token-not-allowed ua=${ua.slice(0, 60)}`);
     }
@@ -508,14 +514,14 @@ async function requireBearerTokenAsync(request: Request, env: Env): Promise<Edge
 
   if (bearer && env.MCP_API_KEY && bearer === env.MCP_API_KEY) {
     console.log(`[auth] ${reqUrl} accepted=mcp-api-key ua=${ua.slice(0, 60)}`);
-    return { error: null, principal: null };
+    return { error: null, principal: null, aud: [] };
   }
 
   if (bearer && bearer.split(".").length === 3) {
     const claims = await verifyCfAccessJwt(bearer, env);
     if (claims) {
       console.log(`[auth] ${reqUrl} accepted=cf-access-jwt ua=${ua.slice(0, 60)}`);
-      return { error: null, principal: principalFromAccessClaims(claims) };
+      return { error: null, principal: principalFromAccessClaims(claims), aud: audiencesFromClaims(claims) };
     }
     console.log(`[auth] ${reqUrl} REJECTED jwt-verify-failed bearer_kind=${bearerKind} ua=${ua.slice(0, 60)}`);
   } else if (bearer && bearer.startsWith("oauth:")) {
@@ -539,6 +545,7 @@ async function requireBearerTokenAsync(request: Request, env: Env): Promise<Edge
     'resource_metadata="https://mcp.chitty.cc/.well-known/oauth-protected-resource/mcp"';
   return {
     principal: null,
+    aud: [],
     error: new Response(
       JSON.stringify({ jsonrpc: "2.0", id: null, error: { code: -32001, message: "unauthorized" } }),
       {
@@ -1537,7 +1544,10 @@ export default {
         const service = env[svc.binding] as Fetcher;
         const newUrl = new URL(request.url);
         newUrl.pathname = path.slice(`/${prefix}`.length) || "/";
-        const proxyReq = buildProxyRequest(request, newUrl.toString(), svc, chittyAuthToken, edge.principal);
+        const gwPrincipal = isGatewayTarget(svc)
+          ? gatewayPrincipal(edge.principal, edge.aud, env.GATEWAY_ACCESS_AUDS)
+          : null;
+        const proxyReq = buildProxyRequest(request, newUrl.toString(), svc, chittyAuthToken, gwPrincipal);
         if (!proxyReq) return withCors(refusedNoPrincipal());
         return service.fetch(proxyReq);
       }
@@ -1555,7 +1565,17 @@ export default {
       // Per-service upstream auth: gateway services get the caller's principal,
       // others chittymcp's own token. null → gateway service with no principal:
       // excluded from list sweeps, refused on direct calls.
-      const authFor = (svc: ServiceEntry) => upstreamAuthHeaders(svc, chittyAuthToken, edge.principal);
+      // Aggregated calls build fresh upstream requests, so no inbound header
+      // (X-Chitty-* included) reaches any agent; only `auth` is added.
+      // The aud check runs once, and only if a gateway binding is touched.
+      let gwPrincipal: string | null | undefined;
+      const authFor = (svc: ServiceEntry) => {
+        if (!isGatewayTarget(svc)) return upstreamAuthHeaders(svc, chittyAuthToken, null);
+        if (gwPrincipal === undefined) {
+          gwPrincipal = gatewayPrincipal(edge.principal, edge.aud, env.GATEWAY_ACCESS_AUDS);
+        }
+        return upstreamAuthHeaders(svc, chittyAuthToken, gwPrincipal);
+      };
 
       let body: any;
       try {

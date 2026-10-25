@@ -6,6 +6,16 @@
   "compatibility_flags": ["nodejs_compat"],
   "account_id": "0bc21e3a5a9de1a4cc843be9c3e98121",
   "observability": { "enabled": true },
+
+  // No `env` blocks exist: `--env production` (deploy:prod) deploys this
+  // top-level config, and vars/services are non-inheritable, so the var lives
+  // here. GATEWAY_ACCESS_AUDS: Access app AUD tags (not secrets) whose JWTs may
+  // name a principal for gateway-entrypoint agents. Empty → gateway refuses.
+  //   c36f8ba8… Access mcp_portal "ChittyMCP" (mcp.chitty.cc)
+  //   533f180b… Access mcp app "ChittyMCP Registry"
+  "vars": {
+    "GATEWAY_ACCESS_AUDS": "c36f8ba835de614d76c58a5f821f00e997ea00406364e40532363e4a096e36d8,533f180b8e0521413b33f265bf42a40c72dde3074a32300f4d5c84bfa9096332"
+  },
   "secrets_store_secrets": [
     { "binding": "CHITTY_AUTH_SERVICE_TOKEN", "store_id": "e914522471964c3c8cf1e601770edcc3", "secret_name": "chitty_auth_service_token" }
   ],
@@ -68,7 +78,7 @@
     { "binding": "SVC_MCP_BUILDER", "service": "chittyagent-mcp-builder" },
     { "binding": "SVC_SCHEMA", "service": "chittyagent-schema" },
     // Named entrypoint: chittymcp forwards the caller principal (X-Chitty-Caller),
-    // not its own token. SERVICE_MAP olmec.gateway = true. See src/worker/gateway.ts.
+    // not its own token. Listed in GATEWAY_BINDINGS (src/worker/gateway.ts).
     { "binding": "SVC_OLMEC", "service": "chittyagent-olmec", "entrypoint": "Gateway" }
   ]
 }
