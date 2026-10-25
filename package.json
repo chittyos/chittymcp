@@ -13,7 +13,7 @@
     "start:evidence": "node src/servers/evidence-server.js",
     "dev": "nodemon src/servers/unified-server.js",
     "dev:evidence": "nodemon src/servers/evidence-server.js",
-    "test": "node --test test/governance-gates.test.js",
+    "test": "node --experimental-strip-types --test test/governance-gates.test.js test/olmec-gateway.test.js",
     "lint": "eslint .",
     "format": "prettier --write .",
     "deploy:prod": "wrangler deploy --config wrangler.jsonc --env production"

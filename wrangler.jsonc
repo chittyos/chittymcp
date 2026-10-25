@@ -66,6 +66,9 @@
     { "binding": "SVC_GIT", "service": "chittyagent-git" },
     { "binding": "SVC_HUMAN_ESCALATOR", "service": "chittyagent-human-escalator" },
     { "binding": "SVC_MCP_BUILDER", "service": "chittyagent-mcp-builder" },
-    { "binding": "SVC_SCHEMA", "service": "chittyagent-schema" }
+    { "binding": "SVC_SCHEMA", "service": "chittyagent-schema" },
+    // Named entrypoint: chittymcp forwards the caller principal (X-Chitty-Caller),
+    // not its own token. SERVICE_MAP olmec.gateway = true. See src/worker/gateway.ts.
+    { "binding": "SVC_OLMEC", "service": "chittyagent-olmec", "entrypoint": "Gateway" }
   ]
 }
