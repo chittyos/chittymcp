@@ -23,7 +23,8 @@
   "tail_consumers": [{ "service": "chittytrack" }],
 
   "routes": [
-    { "pattern": "mcp.chitty.cc/*", "zone_name": "chitty.cc" },
+    // mcp.chitty.cc is the Cloudflare-managed MCP portal (operator decision 2026-06-10, cut over
+    // 2026-06-18). A Worker route here shadows the portal. Do not re-add it (#215 did; reverted 2026-10-25).
     { "pattern": "mcp-aggregator.chitty.cc/*", "zone_name": "chitty.cc" }
   ],
 
