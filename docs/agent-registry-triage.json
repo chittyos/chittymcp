@@ -13,7 +13,7 @@
   },
   "buckets": {
     "A_mcp_layer_live_on_main": {
-      "description": "Current MCP federation derived from deployed chittymcp SERVICE_MAP, excluding non-MCP UI. 38 MCP members; Cloudflare managed portal is separate from the custom aggregator.",
+      "description": "Current MCP federation derived from deployed chittymcp SERVICE_MAP, excluding peer gateways and non-MCP UI. 37 MCP members; Cloudflare managed portal and Ch1tty remain separate execution surfaces.",
       "services": [
         "ai",
         "alchemist",
@@ -21,7 +21,6 @@
         "autoassist",
         "bluebubbles",
         "canon",
-        "ch1tty",
         "chatgpt",
         "cleaner",
         "contextual",
@@ -101,7 +100,7 @@
   },
   "unmerged_branches_blocking_main": [],
   "next_actions": [
-    "Run full initialize → notifications/initialized → tools/list verification across the 38 current SERVICE_MAP members.",
+    "Run full initialize → notifications/initialized → tools/list verification across the 37 current SERVICE_MAP members.",
     "Keep Cloudflare managed portal membership reconciled separately from custom aggregator membership.",
     "Resolve per-service auth/certification failures without reintroducing stale shell-worker entries."
   ],
