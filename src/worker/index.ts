@@ -28,7 +28,6 @@ interface Env {
   SVC_AUTOASSIST: Fetcher;
   SVC_BLUEBUBBLES: Fetcher;
   SVC_CANON: Fetcher;
-  SVC_CH1TTY: Fetcher;
   SVC_CHATGPT: Fetcher;
   SVC_CLEANER: Fetcher;
   SVC_CONTEXTUAL: Fetcher;
@@ -129,7 +128,6 @@ const SERVICE_MAP: Record<string, ServiceEntry> = {
   autoassist:       { binding: "SVC_AUTOASSIST",       label: "AutoAssist",                         category: "communication" },
   bluebubbles:      { binding: "SVC_BLUEBUBBLES",      label: "BlueBubbles bridge",                 category: "communication" },
   canon:            { binding: "SVC_CANON",            label: "Canon (governance)",                 category: "governance" },
-  ch1tty:           { binding: "SVC_CH1TTY",           label: "Ch1tty Gateway",                     category: "platform" },
   chatgpt:          { binding: "SVC_CHATGPT",          label: "ChatGPT Bridge",                     category: "platform" },
   cleaner:          { binding: "SVC_CLEANER",          label: "Cleaner",                            category: "devops" },
   contextual:       { binding: "SVC_CONTEXTUAL",       label: "Contextual (cross-channel conversations)", category: "platform" },
