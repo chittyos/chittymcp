@@ -45,7 +45,6 @@
     { "binding": "SVC_AUTH",         "service": "chittyagent-auth" },
     { "binding": "SVC_AUTOASSIST",   "service": "chittyagent-autoassist" },
     { "binding": "SVC_CANON",        "service": "chittyagent-canon" },
-    { "binding": "SVC_CH1TTY",       "service": "chittyagent-ch1tty" },
     { "binding": "SVC_CHATGPT",      "service": "chittyagent-chatgpt" },
     { "binding": "SVC_CLEANER",      "service": "chittyagent-cleaner" },
     { "binding": "SVC_CONTEXTUAL",   "service": "chittyagent-contextual" },
