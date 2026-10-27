@@ -54,7 +54,6 @@ interface Env {
   SVC_TASKS: Fetcher;
   SVC_TWILIO: Fetcher;
   SVC_VIEWPORT: Fetcher;
-  SVC_UI: Fetcher;
   SVC_COMPTROLLER: Fetcher;
   SVC_GIT: Fetcher;
   SVC_HUMAN_ESCALATOR: Fetcher;
@@ -156,7 +155,6 @@ const SERVICE_MAP: Record<string, ServiceEntry> = {
   tasks:            { binding: "SVC_TASKS",            label: "Tasks Queue",                        category: "platform" },
   twilio:           { binding: "SVC_TWILIO",           label: "Twilio bridge",                      category: "communication" },
   viewport:         { binding: "SVC_VIEWPORT",         label: "Session Viewport",                   category: "platform" },
-  ui:               { binding: "SVC_UI",               label: "Ui (auto-bound)",                    category: "platform" },
   comptroller:      { binding: "SVC_COMPTROLLER",      label: "Comptroller",                        category: "finance" },
   git:              { binding: "SVC_GIT",              label: "Git integration",                    category: "devops" },
   "human-escalator":{ binding: "SVC_HUMAN_ESCALATOR",  label: "Human Escalator",                    category: "communication" },
