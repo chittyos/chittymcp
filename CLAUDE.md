@@ -6,26 +6,40 @@ This file provides guidance to Claude Code when working in this repository.
 
 **ChittyMCP** is the universal MCP aggregator for the ChittyOS ecosystem.
 It is a single Cloudflare Worker (`src/worker/index.ts`) deployed at
-`mcp.chitty.cc` that federates every `chittyagent-*` service MCP under one
-endpoint via Cloudflare service bindings (no HTTP round-trips).
+`mcp.chitty.cc` that federates every service, agent, actor, anima, and SDK
+MCP under one endpoint via Cloudflare service bindings (no HTTP round-trips).
 
 This is **NOT** a tool-implementation repo. ChittyMCP is a router; tool logic
 lives in a sibling worker in the ChittyEntity monorepo under one of four
-canonical directories, keyed by role. Within each directory, the service name
-drops its `Chitty` / `chittyagent-` prefix:
+canonical directories, keyed by role. Nothing in the URL or the directory
+carries a `Chitty` prefix — the category word already supplies that:
+
+### Source layout (chittyentity monorepo)
 
 ```
 github.com/CHITTYOS/chittyentity/
-├─ chittyagents/<name>/   # service MCPs (e.g. chittyagent-dispute → chittyagents/dispute/)
+├─ chittyagents/<name>/   # service MCPs
 ├─ chittyactors/<name>/   # autonomous actors that take external actions
 ├─ chittyanimas/<name>/   # persona / companion entities
 └─ chittysdks/<name>/     # shared libraries consumed by the above
 ```
 
-The Cloudflare worker/service names (`chittyagent-<name>`) and the public
-hostnames (`<name>.chitty.cc`) keep their prefixes — only the source layout in
-`chittyentity/` changed. `chittyentity/workers/chittyagent-*` is the old path
-and no longer the canonical source.
+### Public URL schema
+
+| Role        | URL                              | Example                           |
+|-------------|----------------------------------|-----------------------------------|
+| Service     | `<name>.chitty.cc`               | `notion.chitty.cc`                |
+| Agent       | `agent.chitty.cc/<name>/`        | `agent.chitty.cc/notion/`         |
+| Actor       | `actor.chitty.cc/<name>/`        | `actor.chitty.cc/dispute/`        |
+| Anima       | `anima.chitty.cc/<name>/`        | `anima.chitty.cc/casey/`          |
+| SDK         | `sdk.chitty.cc/<name>/`          | `sdk.chitty.cc/evidence/`         |
+| Aggregator  | `mcp.chitty.cc/<name>/mcp`       | `mcp.chitty.cc/notion/mcp`        |
+
+No `chitty` / `chittyagent-` prefix anywhere in `<name>` — the subdomain
+(service) or path parent (agent / actor / anima / sdk) carries the role.
+`chittyentity/workers/chittyagent-*` is the old source path and no longer
+canonical. (The `wrangler.jsonc` comment claiming `<name>.agent.chitty.cc/mcp`
+is also stale — the live pattern is the table above.)
 
 ## Canonical artifacts (read these first)
 
@@ -52,9 +66,9 @@ CF Worker aggregator was introduced. They are NOT the live system:
 - `chittyos-cloudflare-mcp/`, `chittyos-executive-mcp/`, `chittyos-mcp-extension/`
 
 Tool implementations live in `chittyentity/chittyagents/<name>/` (or the
-sibling `chittyactors/`, `chittyanimas/`, `chittysdks/` directories, with the
-`Chitty` prefix stripped from `<name>`). If you find yourself reaching for
-`src/tools/`, you are in the wrong place.
+sibling `chittyactors/`, `chittyanimas/`, `chittysdks/` directories). `<name>`
+is the bare role name — no `Chitty` or `chittyagent-` prefix. If you find
+yourself reaching for `src/tools/`, you are in the wrong place.
 
 ## Common operations
 
@@ -75,7 +89,12 @@ curl -sX POST https://mcp.chitty.cc/mcp \
   -H "accept: application/json, text/event-stream" \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
 
-# Direct service call (bypass aggregator)
+# Direct call (bypass aggregator) — pick the URL from the schema above:
+#   Service: https://<name>.chitty.cc/mcp
+#   Agent:   https://agent.chitty.cc/<name>/mcp
+#   Actor:   https://actor.chitty.cc/<name>/mcp
+#   Anima:   https://anima.chitty.cc/<name>/mcp
+#   SDK:     https://sdk.chitty.cc/<name>/mcp
 curl -sX POST https://<name>.chitty.cc/mcp \
   -H "content-type: application/json" \
   -d '{"jsonrpc":"2.0","id":1,"method":"initialize",...}'
@@ -85,11 +104,13 @@ curl -sX POST https://<name>.chitty.cc/mcp \
 
 See `docs/MCP-SOP.md`. The short version:
 
-1. In `chittyentity/chittyagents/<name>/src/index.ts` (drop the `Chitty` /
-   `chittyagent-` prefix from `<name>`; use `chittyactors/`, `chittyanimas/`,
-   or `chittysdks/` instead when the role fits), add the canonical McpAgent
-   block (or run `scripts/scaffold-mcp.ts --service <name>`).
-2. Deploy that worker. Verify `https://<name>.chitty.cc/mcp` returns ≥1 tool.
+1. Pick the role directory in `chittyentity/`: `chittyagents/`, `chittyactors/`,
+   `chittyanimas/`, or `chittysdks/`. Create `<name>/src/index.ts` under it
+   (`<name>` is the bare role name, no prefix) and add the canonical McpAgent
+   block (or run `scripts/scaffold-mcp.ts --<role> <name>`).
+2. Deploy that worker. Verify its direct URL from the schema above returns ≥1
+   tool (e.g. `https://notion.chitty.cc/mcp` for a service,
+   `https://agent.chitty.cc/dispute/mcp` for an agent).
 3. Add `SVC_<NAME>` to `wrangler.jsonc` `services[]` and to `SERVICE_MAP`
    in `src/worker/index.ts`.
 4. Deploy `chittymcp`. Verify `mcp.chitty.cc/<name>/mcp` returns the same tools.
