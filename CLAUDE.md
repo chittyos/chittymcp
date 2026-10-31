@@ -10,8 +10,22 @@ It is a single Cloudflare Worker (`src/worker/index.ts`) deployed at
 endpoint via Cloudflare service bindings (no HTTP round-trips).
 
 This is **NOT** a tool-implementation repo. ChittyMCP is a router; tool logic
-lives in each `chittyagent-<name>` worker (separate repo:
-`github.com/CHITTYOS/chittyentity/workers/chittyagent-<name>`).
+lives in a sibling worker in the ChittyEntity monorepo under one of four
+canonical directories, keyed by role. Within each directory, the service name
+drops its `Chitty` / `chittyagent-` prefix:
+
+```
+github.com/CHITTYOS/chittyentity/
+├─ chittyagents/<name>/   # service MCPs (e.g. chittyagent-dispute → chittyagents/dispute/)
+├─ chittyactors/<name>/   # autonomous actors that take external actions
+├─ chittyanimas/<name>/   # persona / companion entities
+└─ chittysdks/<name>/     # shared libraries consumed by the above
+```
+
+The Cloudflare worker/service names (`chittyagent-<name>`) and the public
+hostnames (`<name>.chitty.cc`) keep their prefixes — only the source layout in
+`chittyentity/` changed. `chittyentity/workers/chittyagent-*` is the old path
+and no longer the canonical source.
 
 ## Canonical artifacts (read these first)
 
@@ -37,8 +51,10 @@ CF Worker aggregator was introduced. They are NOT the live system:
 - `config/chains.json`, `config/claude-desktop-config.json`, `mcp-sync-config.json`
 - `chittyos-cloudflare-mcp/`, `chittyos-executive-mcp/`, `chittyos-mcp-extension/`
 
-Tool implementations live in `chittyentity/workers/chittyagent-*`. If you find
-yourself reaching for `src/tools/`, you are in the wrong place.
+Tool implementations live in `chittyentity/chittyagents/<name>/` (or the
+sibling `chittyactors/`, `chittyanimas/`, `chittysdks/` directories, with the
+`Chitty` prefix stripped from `<name>`). If you find yourself reaching for
+`src/tools/`, you are in the wrong place.
 
 ## Common operations
 
@@ -69,8 +85,10 @@ curl -sX POST https://<name>.chitty.cc/mcp \
 
 See `docs/MCP-SOP.md`. The short version:
 
-1. In `chittyentity/workers/chittyagent-<name>/src/index.ts`, add the canonical
-   McpAgent block (or run `scripts/scaffold-mcp.ts --service <name>`).
+1. In `chittyentity/chittyagents/<name>/src/index.ts` (drop the `Chitty` /
+   `chittyagent-` prefix from `<name>`; use `chittyactors/`, `chittyanimas/`,
+   or `chittysdks/` instead when the role fits), add the canonical McpAgent
+   block (or run `scripts/scaffold-mcp.ts --service <name>`).
 2. Deploy that worker. Verify `https://<name>.chitty.cc/mcp` returns ≥1 tool.
 3. Add `SVC_<NAME>` to `wrangler.jsonc` `services[]` and to `SERVICE_MAP`
    in `src/worker/index.ts`.
