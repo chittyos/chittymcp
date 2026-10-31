@@ -122,12 +122,50 @@ are centralized through the aggregator.
 
 - One worker → many tools. Tool names follow `<service>_<verb>` (snake_case).
 - One aggregator → many workers. Aggregator namespaces tools as `<service>/<tool>`.
-- Three aggregators with different membership policies:
-  - `chittymcp` — `surface:all` (default)
-  - `chittymsg` — `domain:messaging`
-  - `ch1tty` — `audience:human AND auth:oauth-ok`
-- Per-aggregator policy is enforced **by reading tags from the CF gateway
-  registration**, not by hand-editing this repo.
+- **Aggregators are role-keyed plugins enumerated by ChittyMarket**, not a
+  hand-maintained list in this repo. Any client — claude.ai, Claude Code,
+  ChatGPT — connects to one market surface and gets the role-aggregations
+  from there; it does not register each aggregator separately. Known roles
+  so far (open-ended; the market is the source of truth):
+
+  | Aggregator        | Role / tag                              |
+  |-------------------|-----------------------------------------|
+  | `chittymcp`       | `surface:all` (default)                 |
+  | `chittymsg`       | `domain:messaging`                      |
+  | `ch1tty`          | `audience:human AND auth:oauth-ok`      |
+  | `chittydev`       | `role:dev`                              |
+  | `chittygws`       | `role:gws` (Google Workspace surface)   |
+  | `chittycommand`   | `role:command` (dispatch + triage)      |
+  | `chitty-code-mode`| `role:code-mode`                        |
+
+- Membership is enforced by reading tags from the ChittyMarket manifest, not
+  by hand-editing `wrangler.jsonc` `services[]` on each aggregator. To add a
+  new role-aggregation, register its manifest in the market with the role
+  tags it should carry — the aggregator worker picks up its membership from
+  there on next deploy. Use the `market_*` tool surface (`market_register`,
+  `market_discover`, `market_get_manifest`) to manage this; do not append
+  entries to `src/worker/index.ts` `SERVICE_MAP` by hand for anything the
+  market already lists.
+
+### Current status (as of 2026-10-31)
+
+The architecture above is the **target state**. Live market content:
+
+- `kind:"agent"` holds ~39 entries (individual services backfilled from the
+  Cloudflare inventory on 2026-05-27, named `chittyagent-<name>` with the
+  old prefix). Health signal is populated.
+- `kind:"mcp"` and `kind:"plugin"` are **empty** — no role-aggregation
+  manifests are registered yet.
+- `market_get_manifest` returns `Unknown surface` for every aggregator
+  (`chittymcp`, `chittymsg`, `chittydev`, `ch1tty`, …).
+
+Consequence: clients today each register the aggregators separately
+(claude.ai lists `ChittyMCP`, `Chitty_Msg`, `ChittyDev`, `ChittyGWS`,
+`ChittyCommand`, `Chitty_Code-Mode`, `ChittyAgent-Google` as independent
+MCP servers). The migration path is: (1) write role-plugin manifests for
+each aggregator, (2) register them under `kind:"plugin"`, (3) point one
+market surface at the client, (4) retire the per-aggregator client entries.
+This section describes where we're going, not where we are.
 
 ## Security model
 
