@@ -1166,8 +1166,8 @@ ChittyOS service tokens follow this format:
 {service}_{type}_{hash}
 
 Examples:
-- mcp_auth_9b69455f5f799a73f16484eb268aea50
-- chittymcp_service_a1b2c3d4e5f6789012345678
+- mcp_auth_{example_hash}
+- chittymcp_service_{example_hash}
 ```
 
 ### Token Validation
