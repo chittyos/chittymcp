@@ -17,24 +17,35 @@ federates them under a single canonical endpoint (`mcp.chitty.cc`) so any MCP cl
 
 CF Gateway is the registry of record. Three aggregators consume it:
 
-| Aggregator | Surface | Audience | Auth |
-|------------|---------|----------|------|
-| **chittymcp** (this repo) | All services / all tools | Machines, agents, devs | Service-binding / token |
-| **chittymsg** | Messaging-domain MCPs (quo, gmail, imsg, openphone, rmail, …) | Comms surfaces | Token |
-| **ch1tty** | Smart / AI gateway, curated subset | Humans, portal | OAuth |
+| Aggregator | Endpoint | Surface | Audience | Auth |
+|------------|----------|---------|----------|------|
+| **chittymcp** (this repo) | `/mcp` | All services / all tools | Machines, agents, devs | Service-binding / token |
+| **chittycpa** | `/cpa/mcp` | `category:finance` MCPs (finance; +future stripe/quickbooks/plaid) | Finance / accounting surfaces | Token |
+| **chittymsg** | `/msg/mcp` | `category:communication` MCPs (quo, twilio, imessage, bluebubbles, notes, dispute, autoassist) | Comms surfaces | Token |
+| **ch1tty** | (separate gateway) | Smart / AI gateway, curated subset | Humans, portal | OAuth |
 
-### Membership (hybrid: tags + per-aggregator policy)
+### Membership (category-based aggregate sub-views)
 
-Each CF-registered service MCP declares tags at registration time
-(`domain:messaging`, `audience:human`, `auth:oauth-ok`, `surface:all`, …).
-Each aggregator applies a policy filter over those tags:
+Each service entry in `SERVICE_MAP` (src/worker/index.ts) carries a `category`
+(`finance`, `communication`, `platform`, `infra`, `legal`, …), reusing the
+`category` vocabulary from ch1tty `servers.json`. A POST to `/{view}/mcp`
+federates only the services whose category matches the view's category, then
+runs the identical aggregate pipeline (initialize / tools/list / tools/call /
+prompts / resources) over that filtered set.
 
-- **chittymcp**: includes everything with `surface:all` (default for new services)
-- **chittymsg**: `domain:messaging`
-- **ch1tty**: `audience:human AND auth:oauth-ok`
+- **chittymcp** (`/mcp`): every bound service (no filter)
+- **chittycpa** (`/cpa/mcp`): `category === "finance"`
+- **chittymsg** (`/msg/mcp`): `category === "communication"`
 
-New services join their relevant aggregators automatically by declaring the right tags;
-aggregator-side policy can still reject (fail-closed).
+View → category mapping lives in `VIEW_CATEGORIES` (src/worker/index.ts). New
+services join a view automatically by declaring the matching `category`; an
+empty filtered set fails CLOSED (zero tools, not the full surface). View names
+never shadow a real service id — a service named like a view wins the route.
+
+> NOTE (2026-06): Prior versions of this charter described `domain:`/`surface:`
+> tag filters. Those were **documentation-only and never enforced** in the
+> worker. The category-based sub-views above are the real, implemented
+> mechanism that replaces them.
 
 ## Endpoint Convention
 

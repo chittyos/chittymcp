@@ -69,6 +69,42 @@ export const tools = [
       },
     },
   },
+  {
+    name: "workspace_move_file",
+    description: "Move a file in Google Drive using the Apps Script proxy",
+    inputSchema: {
+      type: "object",
+      properties: {
+        fileId: {
+          type: "string",
+          description: "Google Drive File ID to move",
+        },
+        destinationFolderId: {
+          type: "string",
+          description: "Google Drive Folder ID of the destination",
+        },
+      },
+      required: ["fileId", "destinationFolderId"],
+    },
+  },
+  {
+    name: "workspace_export_pdf",
+    description: "Export a Google Doc to PDF in Google Drive",
+    inputSchema: {
+      type: "object",
+      properties: {
+        fileId: {
+          type: "string",
+          description: "Google Drive File ID (must be a Google Doc)",
+        },
+        destinationFolderId: {
+          type: "string",
+          description: "Google Drive Folder ID where the PDF will be saved",
+        },
+      },
+      required: ["fileId", "destinationFolderId"],
+    },
+  }
 ];
 
 export { handlers };

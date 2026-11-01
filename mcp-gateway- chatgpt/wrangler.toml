@@ -69,26 +69,6 @@ zone_name = "chitty.cc"
 MCP_VERSION = "2024-11-05"
 CORS_ORIGINS = "https://chat.openai.com,https://chatgpt.com"
 
-[[env.production.services]]
-binding = "SVC_CHITTYID"
-service = "chittyid"
-
-[[env.production.services]]
-binding = "SVC_CHITTYAUTH"
-service = "chittyauth"
-
-[[env.production.services]]
-binding = "SVC_CHITTYCONNECT"
-service = "chittyconnect"
-
-[[env.production.services]]
-binding = "SVC_CHITTYROUTER"
-service = "chittyrouter"
-
-[[env.production.services]]
-binding = "SVC_CHITTYREGISTRY"
-service = "chittyregistry"
-
 # Own hostname — does NOT conflict with mcp.chitty.cc (owned by chittyconnect)
 [[env.production.routes]]
 pattern = "mcp-chatgpt.chitty.cc/*"

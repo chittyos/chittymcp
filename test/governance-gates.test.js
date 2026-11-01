@@ -132,3 +132,30 @@ describe('governance-gates.yml workflow', () => {
     });
   });
 });
+
+
+describe('ChittyMCP upstream transport compatibility', () => {
+  const workerPath = resolve(__dirname, '../src/worker/index.ts');
+  const workerContent = readFileSync(workerPath, 'utf8');
+
+  it('does not require Mcp-Session-Id for upstream discovery', () => {
+    assert.ok(
+      !workerContent.includes('if (!sessionId) return []'),
+      'stateless MCP upstreams must not be dropped when initialize omits Mcp-Session-Id',
+    );
+  });
+
+  it('does not fail tool calls solely because an upstream is stateless', () => {
+    assert.ok(
+      !workerContent.includes('Failed to establish backend session'),
+      'stateless MCP upstreams must continue without a session header',
+    );
+  });
+
+  it('still forwards Mcp-Session-Id when a sessionful upstream provides one', () => {
+    assert.match(
+      workerContent,
+      /if \(sessionId\) .*\["Mcp-Session-Id"\] = sessionId/,
+    );
+  });
+});

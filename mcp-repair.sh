@@ -289,7 +289,10 @@ fix_cloudflare_workers() {
     # Create main chittymcp worker stub
     if [ ! -f "workers/chittymcp-worker/src/index.ts" ]; then
         log_action "Creating chittymcp-worker stub"
-        cat > "workers/chittymcp-worker/src/index.ts" <<'EOF'
+        if [ "$DRY_RUN" = true ]; then
+            echo -e "${YELLOW}[DRY-RUN]${NC} Create workers/chittymcp-worker/src/index.ts"
+        else
+            cat > "workers/chittymcp-worker/src/index.ts" <<'EOF'
 /**
  * ChittyMCP Cloudflare Worker
  * Main MCP server endpoint for ChittyOS ecosystem
@@ -347,13 +350,17 @@ export default {
   }
 };
 EOF
-        log_success "Created chittymcp-worker stub"
+            log_success "Created chittymcp-worker stub"
+        fi
     fi
 
     # Create wrangler config for worker
     if [ ! -f "workers/chittymcp-worker/wrangler.toml" ]; then
         log_action "Creating wrangler.toml for chittymcp-worker"
-        cat > "workers/chittymcp-worker/wrangler.toml" <<'EOF'
+        if [ "$DRY_RUN" = true ]; then
+            echo -e "${YELLOW}[DRY-RUN]${NC} Create workers/chittymcp-worker/wrangler.toml"
+        else
+            cat > "workers/chittymcp-worker/wrangler.toml" <<'EOF'
 name = "chittymcp-worker"
 main = "src/index.ts"
 compatibility_date = "2024-01-01"
@@ -373,13 +380,17 @@ id = "your_kv_namespace_id"
 binding = "BUCKET"
 bucket_name = "chittymcp-storage"
 EOF
-        log_success "Created wrangler.toml"
+            log_success "Created wrangler.toml"
+        fi
     fi
 
     # Create package.json for worker
     if [ ! -f "workers/chittymcp-worker/package.json" ]; then
         log_action "Creating package.json for worker"
-        cat > "workers/chittymcp-worker/package.json" <<'EOF'
+        if [ "$DRY_RUN" = true ]; then
+            echo -e "${YELLOW}[DRY-RUN]${NC} Create workers/chittymcp-worker/package.json"
+        else
+            cat > "workers/chittymcp-worker/package.json" <<'EOF'
 {
   "name": "chittymcp-worker",
   "version": "1.0.0",
@@ -399,7 +410,8 @@ EOF
   }
 }
 EOF
-        log_success "Created worker package.json"
+            log_success "Created worker package.json"
+        fi
     fi
 
     log_info "Workers structure created - install dependencies:"

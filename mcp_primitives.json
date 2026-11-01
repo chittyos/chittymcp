@@ -1,0 +1,241 @@
+{
+  "mcpServers": {
+    "chittyos_alchemize": {
+      "command": "python3",
+      "args": [
+        "-m",
+        "chittyos_alchemize.mcp_server"
+      ],
+      "env": {
+        "NEON_DB_URL": "postgresql://..."
+      },
+      "tools": [
+        {
+          "name": "read",
+          "description": "Fetch a specific entity or state by exact ID. No mutation.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "target_context": {
+                "type": "string",
+                "description": "The appended context fence (e.g. 'finance', 'case_123')"
+              },
+              "payload": {
+                "type": "object",
+                "description": "The arguments for the operation"
+              }
+            },
+            "required": [
+              "target_context",
+              "payload"
+            ]
+          }
+        },
+        {
+          "name": "query",
+          "description": "Search, filter, or aggregate multiple entities based on parameters.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "target_context": {
+                "type": "string",
+                "description": "The appended context fence (e.g. 'finance', 'case_123')"
+              },
+              "payload": {
+                "type": "object",
+                "description": "The arguments for the operation"
+              }
+            },
+            "required": [
+              "target_context",
+              "payload"
+            ]
+          }
+        },
+        {
+          "name": "write",
+          "description": "Mutate state. Covers create, update, and delete.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "target_context": {
+                "type": "string",
+                "description": "The appended context fence (e.g. 'finance', 'case_123')"
+              },
+              "payload": {
+                "type": "object",
+                "description": "The arguments for the operation"
+              }
+            },
+            "required": [
+              "target_context",
+              "payload"
+            ]
+          }
+        },
+        {
+          "name": "provision",
+          "description": "Mint or scaffold new infrastructure, identities, or workspaces.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "target_context": {
+                "type": "string",
+                "description": "The appended context fence (e.g. 'finance', 'case_123')"
+              },
+              "payload": {
+                "type": "object",
+                "description": "The arguments for the operation"
+              }
+            },
+            "required": [
+              "target_context",
+              "payload"
+            ]
+          }
+        },
+        {
+          "name": "deploy",
+          "description": "Push code, configs, or artifacts to a live environment.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "target_context": {
+                "type": "string",
+                "description": "The appended context fence (e.g. 'finance', 'case_123')"
+              },
+              "payload": {
+                "type": "object",
+                "description": "The arguments for the operation"
+              }
+            },
+            "required": [
+              "target_context",
+              "payload"
+            ]
+          }
+        },
+        {
+          "name": "execute",
+          "description": "Run a discrete script, workflow, or binary.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "target_context": {
+                "type": "string",
+                "description": "The appended context fence (e.g. 'finance', 'case_123')"
+              },
+              "payload": {
+                "type": "object",
+                "description": "The arguments for the operation"
+              }
+            },
+            "required": [
+              "target_context",
+              "payload"
+            ]
+          }
+        },
+        {
+          "name": "reckon",
+          "description": "Calculate or evaluate a DRL score based on the ledger.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "target_context": {
+                "type": "string",
+                "description": "The appended context fence (e.g. 'finance', 'case_123')"
+              },
+              "payload": {
+                "type": "object",
+                "description": "The arguments for the operation"
+              }
+            },
+            "required": [
+              "target_context",
+              "payload"
+            ]
+          }
+        },
+        {
+          "name": "bind",
+          "description": "Attach an entity to a session, workspace, or authority scope.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "target_context": {
+                "type": "string",
+                "description": "The appended context fence (e.g. 'finance', 'case_123')"
+              },
+              "payload": {
+                "type": "object",
+                "description": "The arguments for the operation"
+              }
+            },
+            "required": [
+              "target_context",
+              "payload"
+            ]
+          }
+        },
+        {
+          "name": "slash",
+          "description": "Punitive action to revoke authority or destroy reputation.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "target_context": {
+                "type": "string",
+                "description": "The appended context fence (e.g. 'finance', 'case_123')"
+              },
+              "payload": {
+                "type": "object",
+                "description": "The arguments for the operation"
+              }
+            },
+            "required": [
+              "target_context",
+              "payload"
+            ]
+          }
+        },
+        {
+          "name": "audit",
+          "description": "Read operation specifically for the Fractal Evaluator Swarm.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "target_context": {
+                "type": "string",
+                "description": "The appended context fence (e.g. 'finance', 'case_123')"
+              },
+              "payload": {
+                "type": "object",
+                "description": "The arguments for the operation"
+              }
+            },
+            "required": [
+              "target_context",
+              "payload"
+            ]
+          }
+        }
+      ]
+    },
+    "cloudflare": {
+      "url": "https://mcp.cloudflare.com/mcp"
+    },
+    "cloudflare-docs": {
+      "url": "https://docs.mcp.cloudflare.com/mcp"
+    },
+    "cloudflare-bindings": {
+      "url": "https://bindings.mcp.cloudflare.com/mcp"
+    },
+    "cloudflare-builds": {
+      "url": "https://builds.mcp.cloudflare.com/mcp"
+    },
+    "cloudflare-observability": {
+      "url": "https://observability.mcp.cloudflare.com/mcp"
+    }
+  }
+}

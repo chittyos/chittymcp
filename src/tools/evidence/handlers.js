@@ -300,4 +300,44 @@ export const handlers = {
       ],
     };
   },
+
+  async workspace_move_file(args) {
+    const { fileId, destinationFolderId } = args;
+    const proxyUrl = process.env.APPS_SCRIPT_PROXY_URL;
+    if (!proxyUrl) {
+      throw new Error("APPS_SCRIPT_PROXY_URL is not set. Please deploy WorkspaceProxy.gs as a Web App and set this environment variable.");
+    }
+    
+    const response = await fetch(proxyUrl, {
+      method: "POST",
+      body: JSON.stringify({ action: "move_file", fileId, destinationFolderId })
+    });
+    
+    const result = await response.json();
+    if (!result.success) throw new Error(`Proxy error: ${result.error}`);
+    
+    return {
+      content: [{ type: "text", text: `Successfully moved file ${fileId} to folder ${destinationFolderId}.` }]
+    };
+  },
+
+  async workspace_export_pdf(args) {
+    const { fileId, destinationFolderId } = args;
+    const proxyUrl = process.env.APPS_SCRIPT_PROXY_URL;
+    if (!proxyUrl) {
+      throw new Error("APPS_SCRIPT_PROXY_URL is not set. Please deploy WorkspaceProxy.gs as a Web App and set this environment variable.");
+    }
+    
+    const response = await fetch(proxyUrl, {
+      method: "POST",
+      body: JSON.stringify({ action: "export_pdf", fileId, destinationFolderId })
+    });
+    
+    const result = await response.json();
+    if (!result.success) throw new Error(`Proxy error: ${result.error}`);
+    
+    return {
+      content: [{ type: "text", text: `Successfully exported file ${fileId} to PDF in folder ${destinationFolderId}. New PDF ID: ${result.result.pdfId}` }]
+    };
+  }
 };

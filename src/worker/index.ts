@@ -10,6 +10,17 @@
  *   etc.
  */
 
+import {
+  accessJwksForTest,
+  audiencesFromClaims,
+  buildProxyRequest,
+  gatewayPrincipal,
+  isGatewayTarget,
+  principalFromAccessClaims,
+  refusedNoPrincipal,
+  upstreamAuthHeaders,
+} from "./gateway.ts";
+
 interface Env {
   SVC_AI: Fetcher;
   SVC_ALCHEMIST: Fetcher;
@@ -17,9 +28,9 @@ interface Env {
   SVC_AUTOASSIST: Fetcher;
   SVC_BLUEBUBBLES: Fetcher;
   SVC_CANON: Fetcher;
-  SVC_CH1TTY: Fetcher;
   SVC_CHATGPT: Fetcher;
   SVC_CLEANER: Fetcher;
+  SVC_CONTEXTUAL: Fetcher;
   SVC_CLOUDFLARE: Fetcher;
   SVC_DISPATCH: Fetcher;
   SVC_DISPUTE: Fetcher;
@@ -42,16 +53,27 @@ interface Env {
   SVC_TASKS: Fetcher;
   SVC_TWILIO: Fetcher;
   SVC_VIEWPORT: Fetcher;
+  SVC_COMPTROLLER: Fetcher;
+  SVC_GIT: Fetcher;
+  SVC_HUMAN_ESCALATOR: Fetcher;
+  SVC_MCP_BUILDER: Fetcher;
+  SVC_SCHEMA: Fetcher;
+  // Bound to chittyagent-olmec's named entrypoint `Gateway` (wrangler.jsonc).
+  SVC_OLMEC: Fetcher;
   // MCP_API_KEY: shared secret required for /mcp aggregator + /{service}/mcp proxy.
   // Set via `wrangler secret put MCP_API_KEY`.
   MCP_API_KEY?: string;
   // Comma-separated allowlist of CF Access service-token client IDs permitted
   // to reach the MCP surface. Set via `wrangler secret put MCP_ALLOWED_ACCESS_CLIENT_IDS`.
   MCP_ALLOWED_ACCESS_CLIENT_IDS?: string;
+  // Comma-separated Access application AUD tags whose JWTs may name a
+  // principal for gateway-entrypoint agents. Empty/unset → refuse. Plain var.
+  GATEWAY_ACCESS_AUDS?: string;
   MCP_REGISTRY?: KVNamespace;
   CLOUDFLARE_API_TOKEN?: string;
   CLOUDFLARE_ACCOUNT_ID?: string;
   CLOUDFLARE_ZONE_ID?: string;
+  CHITTY_AUTH_SERVICE_TOKEN?: import("@cloudflare/workers-types").SecretsStoreSecret;
   CHITTYAUTH_ISSUED_MCP_ADMIN_TOKEN?: string;
   CHITTYREGISTER_POSTURE_URL?: string;
   CHITTYAUTH_ISSUED_REGISTER_TOKEN?: string;
@@ -80,6 +102,12 @@ type BindingKey = keyof Env;
 interface ServiceEntry {
   binding: BindingKey;
   label: string;
+  // Membership category for aggregate sub-views (e.g. /cpa/mcp = finance,
+  // /msg/mcp = communication). Reuses the `category` vocabulary from
+  // ch1tty servers.json (finance, communication, platform, …) — NOT the
+  // CHARTER's `domain:` tag, which was only ever documented, never enforced.
+  // Defaults to "platform" when a dynamic entry omits it.
+  category: string;
 }
 
 interface DynamicServiceEntry {
@@ -87,43 +115,59 @@ interface DynamicServiceEntry {
   sub: string;
   binding: BindingKey;
   label: string;
+  category?: string;
   enabled?: boolean;
   posture?: string;
   trust_score?: number;
 }
 
 const SERVICE_MAP: Record<string, ServiceEntry> = {
-  ai:               { binding: "SVC_AI",               label: "AI Gateway (chittyclaw)" },
-  alchemist:        { binding: "SVC_ALCHEMIST",        label: "Alchemist (telemetry + entity graph)" },
-  auth:             { binding: "SVC_AUTH",             label: "ChittyAuth (identity + tokens)" },
-  autoassist:       { binding: "SVC_AUTOASSIST",       label: "AutoAssist" },
-  bluebubbles:      { binding: "SVC_BLUEBUBBLES",      label: "BlueBubbles bridge" },
-  canon:            { binding: "SVC_CANON",            label: "Canon (governance)" },
-  ch1tty:           { binding: "SVC_CH1TTY",           label: "Ch1tty Gateway" },
-  chatgpt:          { binding: "SVC_CHATGPT",          label: "ChatGPT Bridge" },
-  cleaner:          { binding: "SVC_CLEANER",          label: "Cleaner" },
-  cloudflare:       { binding: "SVC_CLOUDFLARE",       label: "Cloudflare ops" },
-  dispatch:         { binding: "SVC_DISPATCH",         label: "Dispatch" },
-  dispute:          { binding: "SVC_DISPUTE",          label: "Dispute Management" },
-  evidence:         { binding: "SVC_EVIDENCE",         label: "Evidence Pipeline" },
-  finance:          { binding: "SVC_FINANCE",          label: "Finance (Mercury + Neon)" },
-  gam:              { binding: "SVC_GAM",              label: "Google Workspace Admin" },
-  helper:           { binding: "SVC_HELPER",           label: "Ecosystem Helper" },
-  imessage:         { binding: "SVC_IMESSAGE",         label: "iMessage ops" },
-  market:           { binding: "SVC_MARKET",           label: "ChittyMarket" },
-  neon:             { binding: "SVC_NEON",             label: "Neon Postgres ops" },
-  notes:            { binding: "SVC_NOTES",            label: "Notes & Knowledge" },
-  notion:           { binding: "SVC_NOTION",           label: "Notion workspace ops" },
-  orchestrator:     { binding: "SVC_ORCHESTRATOR",     label: "Orchestrator" },
-  quo:              { binding: "SVC_QUO",              label: "Quo unified messaging" },
-  resolve:          { binding: "SVC_RESOLVE",          label: "Resolve" },
-  sandbox:          { binding: "SVC_SANDBOX",          label: "Code Mode Sandbox" },
-  scrape:           { binding: "SVC_SCRAPE",           label: "Scrape" },
-  ship:             { binding: "SVC_SHIP",             label: "Ship & Deploy" },
-  storage:          { binding: "SVC_STORAGE",          label: "Document Storage" },
-  tasks:            { binding: "SVC_TASKS",            label: "Tasks Queue" },
-  twilio:           { binding: "SVC_TWILIO",           label: "Twilio bridge" },
-  viewport:         { binding: "SVC_VIEWPORT",         label: "Session Viewport" },
+  ai:               { binding: "SVC_AI",               label: "AI Gateway (chittyclaw)",            category: "platform" },
+  alchemist:        { binding: "SVC_ALCHEMIST",        label: "Alchemist (telemetry + entity graph)", category: "platform" },
+  auth:             { binding: "SVC_AUTH",             label: "ChittyAuth (identity + tokens)",     category: "identity" },
+  autoassist:       { binding: "SVC_AUTOASSIST",       label: "AutoAssist",                         category: "communication" },
+  bluebubbles:      { binding: "SVC_BLUEBUBBLES",      label: "BlueBubbles bridge",                 category: "communication" },
+  canon:            { binding: "SVC_CANON",            label: "Canon (governance)",                 category: "governance" },
+  chatgpt:          { binding: "SVC_CHATGPT",          label: "ChatGPT Bridge",                     category: "platform" },
+  cleaner:          { binding: "SVC_CLEANER",          label: "Cleaner",                            category: "devops" },
+  contextual:       { binding: "SVC_CONTEXTUAL",       label: "Contextual (cross-channel conversations)", category: "platform" },
+  cloudflare:       { binding: "SVC_CLOUDFLARE",       label: "Cloudflare ops",                     category: "infra" },
+  dispatch:         { binding: "SVC_DISPATCH",         label: "Dispatch",                           category: "platform" },
+  dispute:          { binding: "SVC_DISPUTE",          label: "Dispute Management",                 category: "communication" },
+  evidence:         { binding: "SVC_EVIDENCE",         label: "Evidence Pipeline",                  category: "legal" },
+  finance:          { binding: "SVC_FINANCE",          label: "Finance (Mercury + Neon)",           category: "finance" },
+  gam:              { binding: "SVC_GAM",              label: "Google Workspace Admin",             category: "infra" },
+  helper:           { binding: "SVC_HELPER",           label: "Ecosystem Helper",                   category: "platform" },
+  imessage:         { binding: "SVC_IMESSAGE",         label: "iMessage ops",                       category: "communication" },
+  market:           { binding: "SVC_MARKET",           label: "ChittyMarket",                       category: "platform" },
+  neon:             { binding: "SVC_NEON",             label: "Neon Postgres ops",                  category: "infra" },
+  notes:            { binding: "SVC_NOTES",            label: "Notes & Knowledge",                  category: "communication" },
+  notion:           { binding: "SVC_NOTION",           label: "Notion workspace ops",               category: "productivity" },
+  orchestrator:     { binding: "SVC_ORCHESTRATOR",     label: "Orchestrator",                       category: "platform" },
+  quo:              { binding: "SVC_QUO",              label: "Quo unified messaging",              category: "communication" },
+  resolve:          { binding: "SVC_RESOLVE",          label: "Resolve",                            category: "devops" },
+  sandbox:          { binding: "SVC_SANDBOX",          label: "Code Mode Sandbox",                  category: "devops" },
+  scrape:           { binding: "SVC_SCRAPE",           label: "Scrape",                             category: "research" },
+  ship:             { binding: "SVC_SHIP",             label: "Ship & Deploy",                      category: "devops" },
+  storage:          { binding: "SVC_STORAGE",          label: "Document Storage",                   category: "infra" },
+  tasks:            { binding: "SVC_TASKS",            label: "Tasks Queue",                        category: "platform" },
+  twilio:           { binding: "SVC_TWILIO",           label: "Twilio bridge",                      category: "communication" },
+  viewport:         { binding: "SVC_VIEWPORT",         label: "Session Viewport",                   category: "platform" },
+  comptroller:      { binding: "SVC_COMPTROLLER",      label: "Comptroller",                        category: "finance" },
+  git:              { binding: "SVC_GIT",              label: "Git integration",                    category: "devops" },
+  "human-escalator":{ binding: "SVC_HUMAN_ESCALATOR",  label: "Human Escalator",                    category: "communication" },
+  "mcp-builder":    { binding: "SVC_MCP_BUILDER",      label: "MCP Builder",                        category: "devops" },
+  schema:           { binding: "SVC_SCHEMA",           label: "Schema registry and drift audit",    category: "governance" },
+  olmec:            { binding: "SVC_OLMEC",            label: "Olmec (gauntlet adversarial review)", category: "devops" },
+};
+
+// Aggregate sub-views: a POST to /{view}/mcp federates only the services whose
+// `category` matches, exposing a focused MCP surface that reuses the same
+// discovery/forward pipeline as the full /mcp aggregate. New services join a
+// view automatically by declaring the matching category in SERVICE_MAP.
+const VIEW_CATEGORIES: Record<string, string> = {
+  cpa: "finance",        // ChittyCPA — money/finance surface
+  msg: "communication",  // ChittyMsg — messaging/comms surface
 };
 
 const MCP_REGISTRY_KEY = "services:v1";
@@ -179,7 +223,13 @@ async function loadActiveServices(env: Env): Promise<Record<string, ServiceEntry
     for (const entry of parsed) {
       if (!entry?.id || !entry?.sub || !entry?.binding || !entry?.label) continue;
       if (!isEligibleByPosture(entry)) continue;
-      active[entry.sub] = { binding: entry.binding, label: entry.label };
+      active[entry.sub] = {
+        binding: entry.binding,
+        label: entry.label,
+        category: entry.category || SERVICE_MAP[entry.sub]?.category || "platform",
+        // Gateway handling is decided from the binding name (GATEWAY_BINDINGS
+        // in gateway.ts), so no KV entry can opt a binding in or out.
+      };
     }
     return Object.keys(active).length > 0 ? active : fallback;
   } catch (err) {
@@ -278,18 +328,18 @@ async function cfApi<T = unknown>(env: Env, path: string, init?: RequestInit): P
       ...(init?.headers || {}),
     },
   });
-  let payload: { success: boolean; result: T; errors?: Array<{ message: string }> } | null = null;
+  let payload: any = null;
   try {
-    payload = await res.json() as typeof payload;
+    payload = await res.json();
   } catch {
     // Non-JSON body (CF edge HTML during incidents, gateway errors, etc.)
     throw new CfApiError(`Cloudflare returned non-JSON body (HTTP ${res.status})`, res.status, method, path);
   }
   if (!res.ok || !payload || !payload.success) {
-    const msg = payload?.errors?.map((e) => e.message).join("; ") || `HTTP ${res.status}`;
+    const msg = payload?.errors?.map((e: any) => e.message).join("; ") || `HTTP ${res.status}`;
     throw new CfApiError(msg, res.status, method, path);
   }
-  return payload.result;
+  return payload.result as T;
 }
 
 interface ReconcileResult {
@@ -382,28 +432,42 @@ function corsHeaders(): Record<string, string> {
 // Cache the JWKS in memory per-isolate so verification doesn't fetch on every
 // request. Refreshed by jose's createRemoteJWKSet rotation logic.
 let cfAccessJwks: ReturnType<typeof import("jose").createRemoteJWKSet> | null = null;
-async function verifyCfAccessJwt(token: string, env: Env): Promise<boolean> {
+async function verifyCfAccessJwt(token: string, env: Env): Promise<Record<string, unknown> | null> {
   try {
     const { jwtVerify, createRemoteJWKSet } = await import("jose");
     if (!cfAccessJwks) {
       cfAccessJwks = createRemoteJWKSet(new URL("https://chittycorp.cloudflareaccess.com/cdn-cgi/access/certs"));
     }
+    const keys = accessJwksForTest() ?? cfAccessJwks;
     // Verify signature + issuer only. CF Access OAuth issues tokens whose
     // `aud` claim is the DCR-registered client_id (e.g. Claude.ai's
     // registration), NOT the mcp-type app's AUD. Enforcing CF_ACCESS_AUD
     // here would falsely reject all OAuth-flow Bearer tokens from clients
     // like Claude.ai's MCP connector. The mcp-type app's policy gate at
     // CF Access already enforces app-level authorization upstream.
-    await jwtVerify(token, cfAccessJwks, { issuer: "https://chittycorp.cloudflareaccess.com" });
-    // CF_ACCESS_AUD intentionally NOT enforced — see comment above.
+    const { payload } = await jwtVerify(token, keys, { issuer: "https://chittycorp.cloudflareaccess.com" });
+    // CF_ACCESS_AUD intentionally NOT enforced here — see comment above. The
+    // gateway-forwarding paths enforce GATEWAY_ACCESS_AUDS on the returned
+    // `aud` instead (gatewayPrincipal in gateway.ts).
     void env;
-    return true;
+    return payload as Record<string, unknown>;
   } catch {
-    return false;
+    return null;
   }
 }
 
-async function requireBearerTokenAsync(request: Request, env: Env): Promise<Response | null> {
+// Result of edge auth: `error` set → reject; otherwise `principal` is the
+// authenticated caller when the credential carries one (Access JWT sub/email),
+// or null for credentials that authenticate without naming a principal
+// (MCP_API_KEY, CF Access service-token headers).
+interface EdgeAuth {
+  error: Response | null;
+  principal: string | null;
+  // Verified Access JWT `aud` values ([] for non-JWT credentials).
+  aud: string[];
+}
+
+async function requireBearerTokenAsync(request: Request, env: Env): Promise<EdgeAuth> {
   const reqUrl = new URL(request.url).pathname;
   const cfJwt = request.headers.get("Cf-Access-Jwt-Assertion");
   const authHeader = request.headers.get("Authorization") || "";
@@ -413,8 +477,12 @@ async function requireBearerTokenAsync(request: Request, env: Env): Promise<Resp
   const ua = request.headers.get("user-agent") || "";
 
   if (cfJwt) {
-    console.log(`[auth] ${reqUrl} accepted=cf-access-header ua=${ua.slice(0, 60)}`);
-    return null;
+    const claims = await verifyCfAccessJwt(cfJwt, env);
+    if (claims) {
+      console.log(`[auth] ${reqUrl} accepted=cf-access-jwt ua=${ua.slice(0, 60)}`);
+      return { error: null, principal: principalFromAccessClaims(claims), aud: audiencesFromClaims(claims) };
+    }
+    console.log(`[auth] ${reqUrl} REJECTED invalid-cf-access-jwt ua=${ua.slice(0, 60)}`);
   }
 
   // CF Access service token headers — /mcp is bypassed in CF Access so the
@@ -434,7 +502,7 @@ async function requireBearerTokenAsync(request: Request, env: Env): Promise<Resp
       console.log(`[auth] ${reqUrl} REJECTED svc-token-no-allowlist ua=${ua.slice(0, 60)}`);
     } else if (allowed.has(svcId)) {
       console.log(`[auth] ${reqUrl} accepted=cf-access-service-token ua=${ua.slice(0, 60)}`);
-      return null;
+      return { error: null, principal: null, aud: [] };
     } else {
       console.log(`[auth] ${reqUrl} REJECTED svc-token-not-allowed ua=${ua.slice(0, 60)}`);
     }
@@ -442,13 +510,14 @@ async function requireBearerTokenAsync(request: Request, env: Env): Promise<Resp
 
   if (bearer && env.MCP_API_KEY && bearer === env.MCP_API_KEY) {
     console.log(`[auth] ${reqUrl} accepted=mcp-api-key ua=${ua.slice(0, 60)}`);
-    return null;
+    return { error: null, principal: null, aud: [] };
   }
 
   if (bearer && bearer.split(".").length === 3) {
-    if (await verifyCfAccessJwt(bearer, env)) {
+    const claims = await verifyCfAccessJwt(bearer, env);
+    if (claims) {
       console.log(`[auth] ${reqUrl} accepted=cf-access-jwt ua=${ua.slice(0, 60)}`);
-      return null;
+      return { error: null, principal: principalFromAccessClaims(claims), aud: audiencesFromClaims(claims) };
     }
     console.log(`[auth] ${reqUrl} REJECTED jwt-verify-failed bearer_kind=${bearerKind} ua=${ua.slice(0, 60)}`);
   } else if (bearer && bearer.startsWith("oauth:")) {
@@ -469,14 +538,18 @@ async function requireBearerTokenAsync(request: Request, env: Env): Promise<Resp
   const wwwAuth =
     'Bearer realm="chittymcp", error="invalid_token", ' +
     'error_description="Missing or invalid access token", ' +
-    'resource_metadata="https://mcp.chitty.cc/.well-known/oauth-protected-resource"';
-  return new Response(
-    JSON.stringify({ jsonrpc: "2.0", id: null, error: { code: -32001, message: "unauthorized" } }),
-    {
-      status: 401,
-      headers: { "Content-Type": "application/json", "WWW-Authenticate": wwwAuth, ...corsHeaders() },
-    },
-  );
+    'resource_metadata="https://mcp.chitty.cc/.well-known/oauth-protected-resource/mcp"';
+  return {
+    principal: null,
+    aud: [],
+    error: new Response(
+      JSON.stringify({ jsonrpc: "2.0", id: null, error: { code: -32001, message: "unauthorized" } }),
+      {
+        status: 401,
+        headers: { "Content-Type": "application/json", "WWW-Authenticate": wwwAuth, ...corsHeaders() },
+      },
+    ),
+  };
 }
 
 function requireBearerToken(request: Request, env: Env): Response | null {
@@ -506,7 +579,7 @@ function requireBearerToken(request: Request, env: Env): Response | null {
     const wwwAuth =
       'Bearer realm="chittymcp", error="invalid_token", ' +
       'error_description="Missing or invalid access token", ' +
-      'resource_metadata="https://mcp.chitty.cc/.well-known/oauth-protected-resource"';
+      'resource_metadata="https://mcp.chitty.cc/.well-known/oauth-protected-resource/mcp"';
     return new Response(
       JSON.stringify({
         jsonrpc: "2.0",
@@ -524,6 +597,11 @@ function requireBearerToken(request: Request, env: Env): Response | null {
     );
   }
   return null;
+}
+
+function withCors(resp: Response): Response {
+  for (const [k, v] of Object.entries(corsHeaders())) resp.headers.set(k, v);
+  return resp;
 }
 
 function sseResponse(data: unknown, headers?: Record<string, string>): Response {
@@ -566,6 +644,7 @@ function resolveToolService(
 async function discoverTools(
   service: Fetcher,
   serviceId: string,
+  auth: Record<string, string>,
 ): Promise<Array<{ name: string; description: string; inputSchema: unknown }>> {
   try {
     const initResp = await service.fetch(
@@ -574,6 +653,7 @@ async function discoverTools(
         headers: {
           "Content-Type": "application/json",
           "Accept": "application/json, text/event-stream",
+          ...auth,
         },
         body: JSON.stringify({
           jsonrpc: "2.0",
@@ -589,16 +669,18 @@ async function discoverTools(
     );
 
     const sessionId = initResp.headers.get("mcp-session-id");
-    if (!sessionId) return [];
+
+    const listHeaders: Record<string, string> = {
+      "Content-Type": "application/json",
+      "Accept": "application/json, text/event-stream",
+      ...auth,
+    };
+    if (sessionId) listHeaders["Mcp-Session-Id"] = sessionId;
 
     const listResp = await service.fetch(
       new Request("https://internal/mcp", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Accept": "application/json, text/event-stream",
-          "Mcp-Session-Id": sessionId,
-        },
+        headers: listHeaders,
         body: JSON.stringify({
           jsonrpc: "2.0",
           method: "tools/list",
@@ -652,6 +734,7 @@ async function discoverMcpItems(
   serviceId: string,
   method: "prompts/list" | "resources/list",
   resultKey: "prompts" | "resources",
+  auth: Record<string, string>,
 ): Promise<unknown[]> {
   try {
     const initResp = await service.fetch(
@@ -660,6 +743,7 @@ async function discoverMcpItems(
         headers: {
           "Content-Type": "application/json",
           "Accept": "application/json, text/event-stream",
+          ...auth,
         },
         body: JSON.stringify({
           jsonrpc: "2.0",
@@ -675,16 +759,18 @@ async function discoverMcpItems(
     );
 
     const sessionId = initResp.headers.get("mcp-session-id");
-    if (!sessionId) return [];
+
+    const listHeaders: Record<string, string> = {
+      "Content-Type": "application/json",
+      "Accept": "application/json, text/event-stream",
+      ...auth,
+    };
+    if (sessionId) listHeaders["Mcp-Session-Id"] = sessionId;
 
     const listResp = await service.fetch(
       new Request("https://internal/mcp", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Accept": "application/json, text/event-stream",
-          "Mcp-Session-Id": sessionId,
-        },
+        headers: listHeaders,
         body: JSON.stringify({
           jsonrpc: "2.0",
           method,
@@ -717,8 +803,9 @@ async function discoverMcpItems(
 async function discoverPrompts(
   service: Fetcher,
   serviceId: string,
+  auth: Record<string, string>,
 ): Promise<unknown[]> {
-  const items = await discoverMcpItems(service, serviceId, "prompts/list", "prompts");
+  const items = await discoverMcpItems(service, serviceId, "prompts/list", "prompts", auth);
   for (const p of items) {
     const name = (p as { name?: string })?.name;
     if (name) PROMPT_ROUTE_INDEX.set(name, serviceId);
@@ -729,8 +816,9 @@ async function discoverPrompts(
 async function discoverResources(
   service: Fetcher,
   serviceId: string,
+  auth: Record<string, string>,
 ): Promise<unknown[]> {
-  const items = await discoverMcpItems(service, serviceId, "resources/list", "resources");
+  const items = await discoverMcpItems(service, serviceId, "resources/list", "resources", auth);
   for (const r of items) {
     const uri = (r as { uri?: string })?.uri;
     if (uri) RESOURCE_ROUTE_INDEX.set(uri, serviceId);
@@ -744,6 +832,7 @@ async function forwardMcpCall(
   method: string,
   params: unknown,
   requestId: unknown,
+  auth: Record<string, string>,
 ): Promise<Response> {
   const initResp = await service.fetch(
     new Request("https://internal/mcp", {
@@ -751,6 +840,7 @@ async function forwardMcpCall(
       headers: {
         "Content-Type": "application/json",
         "Accept": "application/json, text/event-stream",
+          ...auth,
       },
       body: JSON.stringify({
         jsonrpc: "2.0",
@@ -766,22 +856,17 @@ async function forwardMcpCall(
   );
 
   const sessionId = initResp.headers.get("mcp-session-id");
-  if (!sessionId) {
-    return sseResponse({
-      jsonrpc: "2.0",
-      id: requestId,
-      error: { code: -32000, message: "Failed to establish backend session" },
-    });
-  }
+  const callHeaders: Record<string, string> = {
+    "Content-Type": "application/json",
+    "Accept": "application/json, text/event-stream",
+    ...auth,
+  };
+  if (sessionId) callHeaders["Mcp-Session-Id"] = sessionId;
 
   return service.fetch(
     new Request("https://internal/mcp", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Accept": "application/json, text/event-stream",
-        "Mcp-Session-Id": sessionId,
-      },
+      headers: callHeaders,
       body: JSON.stringify({
         jsonrpc: "2.0",
         method,
@@ -798,6 +883,7 @@ async function forwardToolCall(
   toolName: string,
   args: Record<string, unknown>,
   requestId: unknown,
+  auth: Record<string, string>,
 ): Promise<Response> {
   const initResp = await service.fetch(
     new Request("https://internal/mcp", {
@@ -805,6 +891,7 @@ async function forwardToolCall(
       headers: {
         "Content-Type": "application/json",
         "Accept": "application/json, text/event-stream",
+          ...auth,
       },
       body: JSON.stringify({
         jsonrpc: "2.0",
@@ -820,22 +907,17 @@ async function forwardToolCall(
   );
 
   const sessionId = initResp.headers.get("mcp-session-id");
-  if (!sessionId) {
-    return sseResponse({
-      jsonrpc: "2.0",
-      id: requestId,
-      error: { code: -32000, message: "Failed to establish backend session" },
-    });
-  }
+  const callHeaders: Record<string, string> = {
+    "Content-Type": "application/json",
+    "Accept": "application/json, text/event-stream",
+    ...auth,
+  };
+  if (sessionId) callHeaders["Mcp-Session-Id"] = sessionId;
 
   return service.fetch(
     new Request("https://internal/mcp", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Accept": "application/json, text/event-stream",
-        "Mcp-Session-Id": sessionId,
-      },
+      headers: callHeaders,
       body: JSON.stringify({
         jsonrpc: "2.0",
         method: "tools/call",
@@ -1207,8 +1289,15 @@ async function handleAdminBind(request: Request, env: Env): Promise<Response> {
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
+    let chittyAuthToken = "";
+    try {
+      if (env.CHITTY_AUTH_SERVICE_TOKEN) {
+        const val = await env.CHITTY_AUTH_SERVICE_TOKEN.get();
+        if (val) chittyAuthToken = val;
+      }
+    } catch (e) {}
     const url = new URL(request.url);
-    const path = url.pathname;
+    let path = url.pathname;
 
     // Cheap branches first — these don't need the dynamic service map and
     // shouldn't pay a KV read per request.
@@ -1234,6 +1323,7 @@ export default {
           id,
           name: `chittyagent-${id}`,
           label: s.label,
+          category: s.category || "ecosystem",
           transport: "streamable-http",
           endpoints: {
             aggregated: `https://mcp.chitty.cc/${id}/mcp`,
@@ -1258,23 +1348,56 @@ export default {
     const TEAM = "https://chittycorp.cloudflareaccess.com";
     const SELF = "https://mcp.chitty.cc";
 
-    if (request.method === "GET" && path === "/.well-known/oauth-protected-resource") {
+    // RFC 9728 §3.1: clients derive the protected-resource metadata URL by
+    // inserting the resource's PATH into the well-known prefix. For an MCP
+    // server advertised as https://mcp.chitty.cc/mcp, Claude.ai fetches
+    // /.well-known/oauth-protected-resource/mcp — NOT the bare root. Serve the
+    // metadata for the root prefix AND any path suffix so path-scoped discovery
+    // resolves (200) instead of 404.
+    //
+    // Authorization server: this host fronts a Cloudflare Access `mcp_portal`
+    // app, which shadows the worker's OAuth endpoints at the edge and routes
+    // the OAuth handshake to the CF Access team domain (verified live: root
+    // AS-metadata issuer = chittycorp.cloudflareaccess.com; DCR to the team
+    // domain returns 201). Advertising SELF as the AS would send clients to
+    // mcp.chitty.cc/.well-known/oauth-authorization-server, whose edge-served
+    // issuer is the team domain — an RFC 8414 §3.3 issuer mismatch that breaks
+    // the connector. So advertise the team domain as the authorization server.
+    // (On hosts WITHOUT mcp_portal, e.g. mcp.ch1tty.com, the worker serves its
+    // own OAuth endpoints and SELF is correct there — this host differs.)
+    if (
+      request.method === "GET" &&
+      (path === "/.well-known/oauth-protected-resource" ||
+        path.startsWith("/.well-known/oauth-protected-resource/"))
+    ) {
+      // RFC 9728 §3.3: echo the full requested resource identifier so the
+      // client's resource-match check passes (root → SELF; /mcp → SELF/mcp).
+      const suffix = path.slice("/.well-known/oauth-protected-resource".length);
+      const resource = suffix ? `${SELF}${suffix}` : SELF;
       return Response.json({
-        resource: SELF,
-        authorization_servers: [SELF],
+        resource,
+        authorization_servers: [TEAM],
         bearer_methods_supported: ["header"],
         resource_documentation: "https://github.com/CHITTYOS/chittymcp/blob/main/docs/MCP-SOP.md",
       }, { headers: corsHeaders() });
     }
 
-    if (request.method === "GET" && path === "/.well-known/oauth-authorization-server") {
-      // Spec-compliant AS metadata advertising worker-hosted endpoints.
+    if (
+      request.method === "GET" &&
+      (path === "/.well-known/oauth-authorization-server" ||
+        path.startsWith("/.well-known/oauth-authorization-server/"))
+    ) {
+      // Authorization server metadata. On this host the edge (mcp_portal)
+      // shadows root and clients use the team-domain AS, so this worker-served
+      // document is not on Claude.ai's critical path; it is kept path-tolerant
+      // for spec completeness and advertises the CF Access team-domain
+      // endpoints to stay consistent with the protected-resource AS above.
       return Response.json({
-        issuer: SELF,
-        authorization_endpoint: `${SELF}/authorize`,
-        token_endpoint: `${SELF}/token`,
-        registration_endpoint: `${SELF}/register`,
-        revocation_endpoint: `${SELF}/token`,
+        issuer: TEAM,
+        authorization_endpoint: `${TEAM}/cdn-cgi/access/oauth/authorization`,
+        token_endpoint: `${TEAM}/cdn-cgi/access/oauth/token`,
+        registration_endpoint: `${TEAM}/cdn-cgi/access/oauth/registration`,
+        revocation_endpoint: `${TEAM}/cdn-cgi/access/oauth/revoke`,
         response_types_supported: ["code"],
         response_modes_supported: ["query"],
         grant_types_supported: ["authorization_code", "refresh_token"],
@@ -1341,7 +1464,25 @@ export default {
     }
 
     // Everything below depends on the active (posture-filtered) service map.
-    const serviceMap = await loadActiveServices(env);
+    let serviceMap = await loadActiveServices(env);
+
+    // Aggregate sub-view rewrite: a POST to /{view}/mcp (cpa, msg, …) narrows
+    // the map to the services whose `category` matches that view, then rewrites
+    // the path to /mcp so the existing aggregate pipeline (initialize,
+    // tools/list, tools/call, prompts, resources) runs unchanged over the
+    // filtered set. View names never collide with service ids (checked below),
+    // so the per-service proxy loop is unaffected. Fails CLOSED: an empty
+    // filtered map yields an aggregate with zero tools rather than the full set.
+    for (const [view, category] of Object.entries(VIEW_CATEGORIES)) {
+      if (serviceMap[view]) continue; // a real service named like a view wins
+      if (path === `/${view}/mcp` || path.startsWith(`/${view}/mcp/`)) {
+        serviceMap = Object.fromEntries(
+          Object.entries(serviceMap).filter(([, s]) => s.category === category),
+        );
+        path = path.slice(`/${view}`.length) || "/mcp";
+        break;
+      }
+    }
 
     // Service index
     if (request.method === "GET" && (path === "/" || path === "")) {
@@ -1394,12 +1535,17 @@ export default {
     // Per-service proxy: /dispute/mcp → SVC_DISPUTE /mcp (auth-gated, dynamic serviceMap)
     for (const [prefix, svc] of Object.entries(serviceMap)) {
       if (path === `/${prefix}/mcp` || path.startsWith(`/${prefix}/mcp/`)) {
-        const authErr = await requireBearerTokenAsync(request, env);
-        if (authErr) return authErr;
+        const edge = await requireBearerTokenAsync(request, env);
+        if (edge.error) return edge.error;
         const service = env[svc.binding] as Fetcher;
         const newUrl = new URL(request.url);
         newUrl.pathname = path.slice(`/${prefix}`.length) || "/";
-        return service.fetch(new Request(newUrl.toString(), request));
+        const gwPrincipal = isGatewayTarget(svc)
+          ? gatewayPrincipal(edge.principal, edge.aud, env.GATEWAY_ACCESS_AUDS)
+          : null;
+        const proxyReq = buildProxyRequest(request, newUrl.toString(), svc, chittyAuthToken, gwPrincipal);
+        if (!proxyReq) return withCors(refusedNoPrincipal());
+        return service.fetch(proxyReq);
       }
     }
 
@@ -1410,8 +1556,22 @@ export default {
     // connector probes root, gets the service-index JSON, fails to find
     // MCP tools, and reports "There was a problem connecting".
     if ((path === "/" || path === "" || path === "/mcp" || path.startsWith("/mcp/")) && request.method === "POST") {
-      const authErr = await requireBearerTokenAsync(request, env);
-      if (authErr) return authErr;
+      const edge = await requireBearerTokenAsync(request, env);
+      if (edge.error) return edge.error;
+      // Per-service upstream auth: gateway services get the caller's principal,
+      // others chittymcp's own token. null → gateway service with no principal:
+      // excluded from list sweeps, refused on direct calls.
+      // Aggregated calls build fresh upstream requests, so no inbound header
+      // (X-Chitty-* included) reaches any agent; only `auth` is added.
+      // The aud check runs once, and only if a gateway binding is touched.
+      let gwPrincipal: string | null | undefined;
+      const authFor = (svc: ServiceEntry) => {
+        if (!isGatewayTarget(svc)) return upstreamAuthHeaders(svc, chittyAuthToken, null);
+        if (gwPrincipal === undefined) {
+          gwPrincipal = gatewayPrincipal(edge.principal, edge.aud, env.GATEWAY_ACCESS_AUDS);
+        }
+        return upstreamAuthHeaders(svc, chittyAuthToken, gwPrincipal);
+      };
 
       let body: any;
       try {
@@ -1423,6 +1583,11 @@ export default {
           error: { code: -32700, message: "Parse error: request body is not valid JSON" },
         });
       }
+
+      const forwardOrRefuse = (svc: ServiceEntry, fn: (a: Record<string, string>) => Promise<Response>) => {
+        const a = authFor(svc);
+        return a ? fn(a) : Promise.resolve(withCors(refusedNoPrincipal(body.id)));
+      };
 
       if (body.method === "initialize") {
         return sseResponse(
@@ -1451,7 +1616,8 @@ export default {
         const allTools = (await Promise.all(
           Object.entries(serviceMap).map(async ([id, svc]) => {
             const service = env[svc.binding] as Fetcher;
-            return discoverTools(service, id);
+            const a = authFor(svc);
+            return a ? discoverTools(service, id, a) : [];
           }),
         )).flat();
         const cursor = typeof body.params?.cursor === "string" ? body.params.cursor : null;
@@ -1475,14 +1641,14 @@ export default {
           const [sid, ...rest] = toolName.split("/");
           const svc = serviceMap[sid];
           if (svc) {
-            return forwardToolCall(env[svc.binding] as Fetcher, rest.join("/"), body.params?.arguments || {}, body.id);
+            return forwardOrRefuse(svc, (a) => forwardToolCall(env[svc.binding] as Fetcher, rest.join("/"), body.params?.arguments || {}, body.id, a));
           }
         }
         let serviceId = resolveToolService(toolName, serviceMap);
         if (!serviceId) {
           // Cold isolate with empty index — repopulate via a discovery sweep.
           await Promise.all(Object.entries(serviceMap).map(([id, svc]) =>
-            discoverTools(env[svc.binding] as Fetcher, id)));
+            ((a) => (a ? discoverTools(env[svc.binding] as Fetcher, id, a) : Promise.resolve([])))(authFor(svc))));
           serviceId = resolveToolService(toolName, serviceMap);
         }
         if (!serviceId) {
@@ -1493,12 +1659,7 @@ export default {
           });
         }
         const svc = serviceMap[serviceId];
-        return forwardToolCall(
-          env[svc.binding] as Fetcher,
-          toolName,
-          body.params?.arguments || {},
-          body.id,
-        );
+        return forwardOrRefuse(svc, (a) => forwardToolCall(env[svc.binding] as Fetcher, toolName, body.params?.arguments || {}, body.id, a));
       }
 
       // Aggregate prompts/list across all bound services. Pass-through naming
@@ -1509,7 +1670,7 @@ export default {
         const PAGE_SIZE = 50;
         const allPrompts = (await Promise.all(
           Object.entries(serviceMap).map(([id, svc]) =>
-            discoverPrompts(env[svc.binding] as Fetcher, id),
+            ((a) => (a ? discoverPrompts(env[svc.binding] as Fetcher, id, a) : Promise.resolve([])))(authFor(svc)),
           ),
         )).flat();
         const cursor = typeof body.params?.cursor === "string" ? body.params.cursor : null;
@@ -1528,7 +1689,7 @@ export default {
         if (!serviceId || !serviceMap[serviceId]) {
           // Cold isolate — repopulate index via a discovery sweep.
           await Promise.all(Object.entries(serviceMap).map(([id, svc]) =>
-            discoverPrompts(env[svc.binding] as Fetcher, id)));
+            ((a) => (a ? discoverPrompts(env[svc.binding] as Fetcher, id, a) : Promise.resolve([])))(authFor(svc))));
           serviceId = PROMPT_ROUTE_INDEX.get(promptName) || null;
         }
         if (!serviceId) {
@@ -1539,12 +1700,7 @@ export default {
           });
         }
         const svc = serviceMap[serviceId];
-        return forwardMcpCall(
-          env[svc.binding] as Fetcher,
-          "prompts/get",
-          body.params,
-          body.id,
-        );
+        return forwardOrRefuse(svc, (a) => forwardMcpCall(env[svc.binding] as Fetcher, "prompts/get", body.params, body.id, a));
       }
 
       // Aggregate resources/list across all bound services. Resources carry
@@ -1554,7 +1710,7 @@ export default {
         const PAGE_SIZE = 50;
         const allResources = (await Promise.all(
           Object.entries(serviceMap).map(([id, svc]) =>
-            discoverResources(env[svc.binding] as Fetcher, id),
+            ((a) => (a ? discoverResources(env[svc.binding] as Fetcher, id, a) : Promise.resolve([])))(authFor(svc)),
           ),
         )).flat();
         const cursor = typeof body.params?.cursor === "string" ? body.params.cursor : null;
@@ -1572,7 +1728,7 @@ export default {
         let serviceId = RESOURCE_ROUTE_INDEX.get(uri) || null;
         if (!serviceId || !serviceMap[serviceId]) {
           await Promise.all(Object.entries(serviceMap).map(([id, svc]) =>
-            discoverResources(env[svc.binding] as Fetcher, id)));
+            ((a) => (a ? discoverResources(env[svc.binding] as Fetcher, id, a) : Promise.resolve([])))(authFor(svc))));
           serviceId = RESOURCE_ROUTE_INDEX.get(uri) || null;
         }
         if (!serviceId) {
@@ -1583,12 +1739,7 @@ export default {
           });
         }
         const svc = serviceMap[serviceId];
-        return forwardMcpCall(
-          env[svc.binding] as Fetcher,
-          "resources/read",
-          body.params,
-          body.id,
-        );
+        return forwardOrRefuse(svc, (a) => forwardMcpCall(env[svc.binding] as Fetcher, "resources/read", body.params, body.id, a));
       }
 
       // resources/templates/list — clients may call this to discover URI

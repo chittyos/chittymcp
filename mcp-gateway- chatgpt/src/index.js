@@ -58,10 +58,10 @@ export const SERVICE_IDENTITY = {
 app.get('/health', (c) => {
   return c.json({
     status: 'ok',
-    service: SERVICE_IDENTITY.name,
-    version: SERVICE_IDENTITY.version,
-    protocol: SERVICE_IDENTITY.protocol,
-    transport: SERVICE_IDENTITY.transport,
+    service: 'chittymcp-gateway',
+    version: '1.1.0',
+    protocol: 'MCP 2024-11-05',
+    transport: 'HTTP/JSON-RPC 2.0',
     timestamp: new Date().toISOString()
   });
 });
